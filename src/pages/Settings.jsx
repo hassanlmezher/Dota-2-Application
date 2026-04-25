@@ -41,6 +41,8 @@ export default function Settings() {
     "provider"    "1"
     "map"         "1"
     "draft"       "1"
+    "allplayers"  "1"
+    "allheroes"   "1"
     "hero"        "1"
     "player"      "1"
     "items"       "1"

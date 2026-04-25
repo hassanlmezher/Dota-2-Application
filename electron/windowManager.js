@@ -21,6 +21,12 @@ let mainWindow = null;
 let overlayWindow = null;
 let overlayMode = "launcher";
 
+function delay(milliseconds) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, milliseconds);
+  });
+}
+
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
@@ -38,6 +44,34 @@ function resolveRendererTarget(route = "/") {
 
   const fileUrl = pathToFileURL(distIndexPath).toString();
   return `${fileUrl}#${normalizedRoute}`;
+}
+
+function isTransientLoadError(error) {
+  const message = `${error?.message || ""}`.toLowerCase();
+
+  return (
+    message.includes("err_aborted") ||
+    message.includes("err_connection_refused") ||
+    message.includes("err_connection_reset") ||
+    message.includes("err_internet_disconnected")
+  );
+}
+
+async function loadWindowRoute(browserWindow, route, attempts = 8) {
+  const targetUrl = resolveRendererTarget(route);
+
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      await browserWindow.loadURL(targetUrl);
+      return;
+    } catch (error) {
+      if (!isTransientLoadError(error) || attempt === attempts - 1) {
+        throw error;
+      }
+
+      await delay(350);
+    }
+  }
 }
 
 function attachWindowDefaults(browserWindow) {
@@ -171,7 +205,7 @@ async function createMainWindow() {
     mainWindow = null;
   });
 
-  await mainWindow.loadURL(resolveRendererTarget("/"));
+  await loadWindowRoute(mainWindow, "/");
   notifyOverlayState();
   return mainWindow;
 }
@@ -203,7 +237,7 @@ async function ensureOverlayWindow(mode = overlayMode) {
     notifyOverlayState();
   });
 
-  await overlayWindow.loadURL(resolveRendererTarget("/overlay"));
+  await loadWindowRoute(overlayWindow, "/overlay");
   setOverlayMode(mode);
   notifyOverlayState();
 
