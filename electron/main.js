@@ -8,11 +8,9 @@ const {
   ensureOverlayWindow,
   focusMainWindow,
   getOverlayState,
-  getOverlayWindow,
   hideOverlayWindow,
   moveOverlayWindow,
   notifyOverlayState,
-  setOverlayMode,
   showOverlayWindow,
 } = require("./windowManager.js");
 
@@ -263,24 +261,24 @@ function registerIpcHandlers() {
       return hideOverlayWindow();
     }
 
-    const overlayWindow = await ensureOverlayWindow("launcher");
+    await ensureOverlayWindow("launcher");
 
     if (latestMatchState) {
-      overlayWindow.webContents.send("gsi:state", latestMatchState);
+      broadcastToWindows("gsi:state", latestMatchState);
     }
 
-    showOverlayWindow("launcher");
+    await showOverlayWindow("launcher");
     return getOverlayState();
   });
 
-  ipcMain.handle("window:show-overlay", async (_event, mode = "launcher") => {
-    const overlayWindow = await ensureOverlayWindow(mode);
+  ipcMain.handle("window:show-overlay", async (event, mode = "launcher") => {
+    await ensureOverlayWindow(mode, { sender: event.sender });
 
     if (latestMatchState) {
-      overlayWindow.webContents.send("gsi:state", latestMatchState);
+      broadcastToWindows("gsi:state", latestMatchState);
     }
 
-    showOverlayWindow(mode);
+    await showOverlayWindow(mode, { sender: event.sender });
     return getOverlayState();
   });
 
@@ -290,20 +288,19 @@ function registerIpcHandlers() {
 
   ipcMain.handle("window:get-overlay-state", () => getOverlayState());
 
-  ipcMain.handle("window:set-overlay-mode", async (_event, mode) => {
-    const overlayWindow = await ensureOverlayWindow(mode);
+  ipcMain.handle("window:set-overlay-mode", async (event, mode) => {
+    await ensureOverlayWindow(mode, { sender: event.sender });
 
     if (latestMatchState) {
-      overlayWindow.webContents.send("gsi:state", latestMatchState);
+      broadcastToWindows("gsi:state", latestMatchState);
     }
 
-    setOverlayMode(mode);
-    showOverlayWindow(mode);
+    await showOverlayWindow(mode, { sender: event.sender });
     return getOverlayState();
   });
 
-  ipcMain.handle("window:move-overlay", (_event, coordinates) => {
-    return moveOverlayWindow(coordinates?.x, coordinates?.y);
+  ipcMain.handle("window:move-overlay", (event, coordinates) => {
+    return moveOverlayWindow(coordinates?.x, coordinates?.y, event.sender);
   });
 
   ipcMain.handle("window:focus-main", () => {
