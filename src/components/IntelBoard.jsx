@@ -135,12 +135,14 @@ export default function IntelBoard({
   const compact = variant === "compact";
   const {
     phase,
+    audienceMode,
     phaseLabel,
     mapStateLabel,
     clockLabel,
     heroName,
     playerLevel,
     currentItems,
+    enemyLabel,
     enemyHeroes,
     enemyInventories,
     enemyHealth,
@@ -148,6 +150,7 @@ export default function IntelBoard({
     counterPickLoading,
     itemResults,
     itemLoading,
+    hasAnyLiveContext,
   } = useOverlayInsights({
     matchState,
     role,
@@ -168,13 +171,25 @@ export default function IntelBoard({
       <div className="intel-board__hero">
         <div>
           <p className="intel-kicker">{phaseLabel}</p>
-          <h2>{inMatch ? heroName : inDraft ? "Enemy draft detected" : "Waiting for live data"}</h2>
+          <h2>
+            {inMatch
+              ? heroName
+              : inDraft
+                ? `${enemyLabel} draft detected`
+                : hasAnyLiveContext
+                  ? "Live feed connected"
+                  : "Waiting for live data"}
+          </h2>
           <p>
             {inMatch
-              ? `Clock ${clockLabel} • ${mapStateLabel}${playerLevel ? ` • Level ${playerLevel}` : ""}`
+              ? audienceMode === "spectator"
+                ? `Clock ${clockLabel} • ${mapStateLabel} • Spectator or observed match feed`
+                : `Clock ${clockLabel} • ${mapStateLabel}${playerLevel ? ` • Level ${playerLevel}` : ""}`
               : inDraft
                 ? `Role-based counter suggestions are tied to your saved role: ${ROLE_LOOKUP[role]}.`
-                : "Start the overlay, launch Dota 2, and point Game State Integration at localhost:3001."}
+                : hasAnyLiveContext
+                  ? "The app sees live match context. As more hero, item, and health data arrives it will populate automatically."
+                  : "Start the overlay, launch Dota 2, and point Game State Integration at localhost:3001."}
           </p>
         </div>
 
@@ -186,7 +201,9 @@ export default function IntelBoard({
           >
             {serverStatus?.running ? "GSI Listening" : "GSI Offline"}
           </span>
-          {inMatch ? <strong>{currentItems.length} current items</strong> : null}
+          {inMatch && audienceMode !== "spectator" ? (
+            <strong>{currentItems.length} current items</strong>
+          ) : null}
         </div>
       </div>
 
@@ -213,7 +230,7 @@ export default function IntelBoard({
         <div className={`intel-grid ${compact ? "intel-grid--stacked" : ""}`}>
           <section className="intel-panel">
             <div className="intel-section-header">
-              <h3>Enemy Picks</h3>
+              <h3>{enemyLabel} Picks</h3>
               <span>{enemyHeroes.length}</span>
             </div>
 
@@ -230,8 +247,8 @@ export default function IntelBoard({
               </div>
             ) : (
               <EmptyCard
-                title="No enemy picks yet"
-                description="As soon as the feed sees enemy heroes during draft, they will appear here."
+                title={`No ${enemyLabel.toLowerCase()} picks yet`}
+                description="As soon as the feed sees draft heroes, they will appear here."
               />
             )}
           </section>
@@ -276,14 +293,14 @@ export default function IntelBoard({
                 className={activeTab === "items" ? "intel-tab intel-tab--active" : "intel-tab"}
                 onClick={() => setActiveTab("items")}
               >
-                Item Suggestions
+                {audienceMode === "spectator" ? "Hero Items" : "Item Suggestions"}
               </button>
               <button
                 type="button"
                 className={activeTab === "hp" ? "intel-tab intel-tab--active" : "intel-tab"}
                 onClick={() => setActiveTab("hp")}
               >
-                Enemy HP
+                {enemyLabel} HP
               </button>
             </div>
           ) : null}
@@ -292,7 +309,7 @@ export default function IntelBoard({
             {(!compact || activeTab === "items") && (
               <section className="intel-panel">
                 <div className="intel-section-header">
-                  <h3>Item Suggestions</h3>
+                  <h3>{audienceMode === "spectator" ? "Observed Hero Items" : "Item Suggestions"}</h3>
                   <span>{itemLoading ? "updating..." : itemResults.length}</span>
                 </div>
 
@@ -306,8 +323,8 @@ export default function IntelBoard({
                     ))
                   ) : (
                     <EmptyCard
-                      title="Enemy inventories unavailable"
-                      description="If your GSI payload includes enemy items, they will be grouped here by hero."
+                      title={`${enemyLabel} inventories unavailable`}
+                      description="If your GSI payload includes hero items, they will be grouped here automatically."
                     />
                   )}
                 </div>
@@ -324,8 +341,16 @@ export default function IntelBoard({
                     ))
                   ) : (
                     <EmptyCard
-                      title="No item suggestions yet"
-                      description="The panel needs your hero and enemy context before it can score purchases."
+                      title={
+                        audienceMode === "spectator"
+                          ? "Observed items are live"
+                          : "No item suggestions yet"
+                      }
+                      description={
+                        audienceMode === "spectator"
+                          ? "Hero inventories still update in spectator mode even when there is no single local hero to optimize around."
+                          : "The panel needs your hero and enemy context before it can score purchases."
+                      }
                     />
                   )}
                 </div>
@@ -335,7 +360,7 @@ export default function IntelBoard({
             {(!compact || activeTab === "hp") && (
               <section className="intel-panel">
                 <div className="intel-section-header">
-                  <h3>Enemy HP</h3>
+                  <h3>{enemyLabel} HP</h3>
                   <span>{enemyHealth.length}</span>
                 </div>
 
@@ -347,8 +372,8 @@ export default function IntelBoard({
                   </div>
                 ) : (
                   <EmptyCard
-                    title="Enemy health feed inactive"
-                    description="If your GSI payload includes enemy hero health, this panel will update live."
+                    title={`${enemyLabel} health feed inactive`}
+                    description="If your GSI payload includes visible hero health, this panel will update live."
                   />
                 )}
               </section>
@@ -366,7 +391,7 @@ export default function IntelBoard({
             </div>
             <EmptyCard
               title="Before the horn"
-              description="During the picking phase, this board switches to enemy picks and role-based counter recommendations."
+              description="During the picking phase, this board switches to observed picks and role-based counter recommendations."
             />
           </section>
 

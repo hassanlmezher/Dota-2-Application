@@ -110,8 +110,12 @@ function normalizeState(payload) {
     : /radiant/i.test(localTeam)
       ? /dire|enemy/i
       : /radiant|enemy/i;
-  const enemyHeroes = heroes.filter((entry) => enemyMatcher.test(entry.team || ""));
-  const enemyPlayers = players.filter((entry) => enemyMatcher.test(entry.team || ""));
+  const enemyHeroes = !localTeam
+    ? heroes
+    : heroes.filter((entry) => enemyMatcher.test(entry.team || ""));
+  const enemyPlayers = !localTeam
+    ? players
+    : players.filter((entry) => enemyMatcher.test(entry.team || ""));
 
   return {
     raw: payload,

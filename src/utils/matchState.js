@@ -53,21 +53,9 @@ function normalizeInventory(items = []) {
     .filter((item) => item.name && item.name.toLowerCase() !== "empty");
 }
 
-function sameEntity(left, right) {
-  if (!left || !right) {
-    return false;
-  }
-
-  if (left.id && right.id) {
-    return String(left.id) === String(right.id);
-  }
-
-  return normalizeText(left.name) === normalizeText(right.name);
-}
-
 function normalizeHeroEntry(entry = {}, index = 0) {
   const name = formatHeroName(
-    entry.name || entry.localized_name || entry.heroName || entry.hero_name || `Enemy ${index + 1}`
+    entry.name || entry.localized_name || entry.heroName || entry.hero_name || `Hero ${index + 1}`
   );
 
   return {
@@ -83,13 +71,25 @@ function normalizeHeroEntry(entry = {}, index = 0) {
   };
 }
 
-function mergeEnemyData(heroEntries, playerEntries) {
+function entityMatches(left, right) {
+  if (!left || !right) {
+    return false;
+  }
+
+  if (left.id && right.id) {
+    return String(left.id) === String(right.id);
+  }
+
+  return normalizeText(left.name) === normalizeText(right.name);
+}
+
+function mergeVisibleHeroes(heroEntries, playerEntries) {
   const merged = [];
   const consumedPlayers = new Set();
 
   for (const heroEntry of heroEntries) {
     const matchingPlayerIndex = playerEntries.findIndex((playerEntry) =>
-      sameEntity(heroEntry, playerEntry)
+      entityMatches(heroEntry, playerEntry)
     );
     const matchingPlayer = matchingPlayerIndex >= 0 ? playerEntries[matchingPlayerIndex] : null;
 
@@ -103,6 +103,7 @@ function mergeEnemyData(heroEntries, playerEntries) {
       health: matchingPlayer?.health ?? heroEntry.health,
       maxHealth: matchingPlayer?.maxHealth ?? heroEntry.maxHealth,
       healthPercent: matchingPlayer?.healthPercent ?? heroEntry.healthPercent,
+      team: matchingPlayer?.team || heroEntry.team,
     });
   }
 
@@ -132,10 +133,63 @@ function formatClockTime(clockTime) {
   return `${sign}${minutes}:${seconds}`;
 }
 
-function detectPhase({ gameState, clockTime, enemyHeroes, enemyHealth }) {
+function chooseTrackedHeroes({
+  localTeam,
+  localHeroId,
+  localHeroName,
+  explicitEnemies,
+  explicitEnemyPlayers,
+  visibleHeroes,
+}) {
+  const mergedEnemies = mergeVisibleHeroes(explicitEnemies, explicitEnemyPlayers);
+
+  if (localTeam && mergedEnemies.length) {
+    return mergedEnemies;
+  }
+
+  if (localTeam && visibleHeroes.length) {
+    return visibleHeroes.filter((entry) => {
+      if (localHeroId && entry.id) {
+        return String(entry.id) !== String(localHeroId);
+      }
+
+      return normalizeText(entry.name) !== normalizeText(localHeroName);
+    });
+  }
+
+  if (mergedEnemies.length) {
+    return mergedEnemies;
+  }
+
+  return visibleHeroes;
+}
+
+function detectPhase({
+  gameState,
+  clockTime,
+  trackedHeroes,
+  trackedHealth,
+  map,
+  provider,
+  currentItems,
+  localHeroId,
+  visibleHeroes,
+}) {
   const normalizedState = normalizeText(gameState);
-  const hasEnemyHeroes = enemyHeroes.length > 0;
-  const hasEnemyHealth = enemyHealth.length > 0;
+  const hasClock = typeof clockTime === "number";
+  const hasTrackedHeroes = trackedHeroes.length > 0;
+  const hasTrackedHealth = trackedHealth.length > 0;
+  const hasVisibleHeroes = visibleHeroes.length > 0;
+  const hasMapContext = Boolean(
+    map?.matchid ||
+      map?.match_id ||
+      map?.name ||
+      map?.game_time ||
+      map?.game_state ||
+      map?.clock_time
+  );
+  const hasProviderContext = Boolean(provider?.appid || provider?.version || provider?.name);
+  const hasLocalContext = Boolean(localHeroId || currentItems.length);
 
   const isDraftState =
     normalizedState.includes("hero_selection") ||
@@ -149,15 +203,21 @@ function detectPhase({ gameState, clockTime, enemyHeroes, enemyHealth }) {
     normalizedState.includes("pre_game") ||
     normalizedState.includes("post_game") ||
     normalizedState.includes("last") ||
-    (typeof clockTime === "number" && clockTime >= 0) ||
-    hasEnemyHealth;
+    hasClock ||
+    hasTrackedHealth ||
+    (hasMapContext && (hasVisibleHeroes || hasLocalContext)) ||
+    (hasProviderContext && (hasVisibleHeroes || hasLocalContext));
 
-  if (isDraftState || (hasEnemyHeroes && !isLiveState)) {
+  if (isDraftState && !isLiveState) {
     return "draft";
   }
 
   if (isLiveState) {
     return "match";
+  }
+
+  if (hasTrackedHeroes) {
+    return "draft";
   }
 
   return "idle";
@@ -167,11 +227,24 @@ function deriveMatchInsights(matchState) {
   const map = matchState?.map || {};
   const hero = matchState?.hero || {};
   const player = matchState?.player || {};
-  const heroEntries = (matchState?.enemyHeroes || []).map(normalizeHeroEntry);
-  const playerEntries = (matchState?.enemyPlayers || []).map(normalizeHeroEntry);
-  const enemyHeroes = mergeEnemyData(heroEntries, playerEntries);
-  const enemyHeroIds = enemyHeroes.map((entry) => entry.id).filter(Boolean);
-  const enemyInventories = enemyHeroes
+  const localTeam = matchState?.localTeam || hero.team || player.team_name || player.team || null;
+  const localHeroId = toNumber(hero.id ?? player.hero_id);
+  const localHeroName = formatHeroName(hero.name || player.hero_name || "Unknown Hero");
+  const visibleHeroEntries = (matchState?.heroes || []).map(normalizeHeroEntry);
+  const visiblePlayerEntries = (matchState?.players || []).map(normalizeHeroEntry);
+  const visibleHeroes = mergeVisibleHeroes(visibleHeroEntries, visiblePlayerEntries);
+  const explicitEnemyHeroes = (matchState?.enemyHeroes || []).map(normalizeHeroEntry);
+  const explicitEnemyPlayers = (matchState?.enemyPlayers || []).map(normalizeHeroEntry);
+  const trackedHeroes = chooseTrackedHeroes({
+    localTeam,
+    localHeroId,
+    localHeroName,
+    explicitEnemies: explicitEnemyHeroes,
+    explicitEnemyPlayers,
+    visibleHeroes,
+  });
+  const trackedHeroIds = trackedHeroes.map((entry) => entry.id).filter(Boolean);
+  const trackedInventories = trackedHeroes
     .filter((entry) => entry.items.length)
     .map((entry) => ({
       heroId: entry.id,
@@ -179,32 +252,64 @@ function deriveMatchInsights(matchState) {
       imageUrl: entry.imageUrl,
       items: entry.items,
     }));
-  const enemyItemsFlat = enemyInventories.flatMap((inventory) => inventory.items);
-  const enemyItemIds = enemyItemsFlat.map((item) => item.id).filter(Boolean);
-  const enemyHealth = enemyHeroes.filter((entry) => entry.healthPercent !== null);
+  const trackedItemsFlat = trackedInventories.flatMap((inventory) => inventory.items);
+  const trackedItemIds = trackedItemsFlat.map((item) => item.id).filter(Boolean);
+  const trackedHealth = trackedHeroes.filter((entry) => entry.healthPercent !== null);
+  const currentItems = normalizeInventory(matchState?.items).length
+    ? normalizeInventory(matchState?.items)
+    : normalizeInventory(
+        visibleHeroes.find((entry) =>
+          localHeroId ? String(entry.id) === String(localHeroId) : false
+        )?.items || []
+      );
   const phase = detectPhase({
     gameState: map.game_state,
     clockTime: map.clock_time,
-    enemyHeroes,
-    enemyHealth,
+    trackedHeroes,
+    trackedHealth,
+    map,
+    provider: matchState?.provider,
+    currentItems,
+    localHeroId,
+    visibleHeroes,
   });
+  const audienceMode = localTeam || localHeroId ? "player" : trackedHeroes.length ? "spectator" : "idle";
+  const displayHeroName =
+    localHeroId || hero.name || player.hero_name
+      ? localHeroName
+      : audienceMode === "spectator"
+        ? "Spectator Mode"
+        : "Unknown Hero";
 
   return {
     phase,
+    audienceMode,
     phaseLabel:
-      phase === "draft" ? "Draft phase" : phase === "match" ? "Live match" : "Awaiting Dota 2",
+      phase === "draft"
+        ? audienceMode === "spectator"
+          ? "Observed draft"
+          : "Draft phase"
+        : phase === "match"
+          ? audienceMode === "spectator"
+            ? "Observed live match"
+            : "Live match"
+          : "Awaiting Dota 2",
     mapStateLabel: formatGameStateLabel(map.game_state),
     clockLabel: formatClockTime(map.clock_time),
-    heroId: toNumber(hero.id ?? player.hero_id),
-    heroName: formatHeroName(hero.name || player.hero_name || "Unknown Hero"),
+    heroId: localHeroId,
+    heroName: displayHeroName,
     playerLevel: toNumber(player.level ?? hero.level),
-    currentItems: normalizeInventory(matchState?.items),
-    enemyHeroes,
-    enemyHeroIds,
-    enemyInventories,
-    enemyItemsFlat,
-    enemyItemIds,
-    enemyHealth,
+    currentItems,
+    enemyLabel: audienceMode === "spectator" ? "Observed" : "Enemy",
+    enemyHeroes: trackedHeroes,
+    enemyHeroIds: trackedHeroIds,
+    enemyInventories: trackedInventories,
+    enemyItemsFlat: trackedItemsFlat,
+    enemyItemIds: trackedItemIds,
+    enemyHealth: trackedHealth,
+    hasAnyLiveContext:
+      phase !== "idle" ||
+      Boolean(matchState?.provider?.appid || map?.game_state || map?.clock_time),
   };
 }
 
