@@ -835,6 +835,39 @@
   background: rgba(180, 84, 43, 0.08);
 }
 
+.settings-action-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+  margin-bottom: 18px;
+}
+
+.settings-gsi-button {
+  justify-self: start;
+  min-width: 220px;
+  padding: 0 18px;
+  font-family: "Rajdhani", sans-serif;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.settings-inline-message {
+  color: var(--text-muted);
+  line-height: 1.55;
+  word-break: break-word;
+}
+
+.settings-inline-message--success {
+  color: #b7f2c9;
+}
+
+.settings-inline-message--error {
+  color: #ffc5be;
+}
+
 .settings-runtime-row {
   align-items: center;
   padding: 14px 16px;
@@ -920,6 +953,10 @@
   .settings-footer {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .settings-action-row {
+    grid-template-columns: 1fr;
   }
 
   .landing-hero {

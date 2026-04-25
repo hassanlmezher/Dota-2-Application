@@ -4,25 +4,6 @@ import { ROLES, ROLE_LOOKUP } from "../constants/roles";
 import { hasCredentials } from "../api/supabaseClient";
 import { PREFERENCE_KEYS, readPreference, writePreference } from "../utils/preferences";
 
-const gsiConfigSnippet = `"DotaHelper"
-{
-  "uri"           "http://127.0.0.1:3001/gsi"
-  "timeout"       "5.0"
-  "buffer"        "0.1"
-  "throttle"      "0.1"
-  "heartbeat"     "30.0"
-  "data"
-  {
-    "provider"    "1"
-    "map"         "1"
-    "draft"       "1"
-    "hero"        "1"
-    "player"      "1"
-    "items"       "1"
-    "abilities"   "1"
-  }
-}`;
-
 export default function Settings() {
   const gsi = useOutletContext();
   const [defaultRole, setDefaultRole] = useState(
@@ -38,10 +19,33 @@ export default function Settings() {
     readPreference(PREFERENCE_KEYS.ambientMotion, true)
   );
   const [savedMessage, setSavedMessage] = useState("");
+  const [gsiSetupMessage, setGsiSetupMessage] = useState("");
+  const [gsiSetupVariant, setGsiSetupVariant] = useState("idle");
 
   const endpointLabel = useMemo(
     () => gsi?.serverStatus?.endpoint || "http://127.0.0.1:3001/gsi",
     [gsi?.serverStatus?.endpoint]
+  );
+  const gsiConfigSnippet = useMemo(
+    () => `"DotaHelper"
+{
+  "uri"           "${endpointLabel}"
+  "timeout"       "5.0"
+  "buffer"        "0.1"
+  "throttle"      "0.1"
+  "heartbeat"     "30.0"
+  "data"
+  {
+    "provider"    "1"
+    "map"         "1"
+    "draft"       "1"
+    "hero"        "1"
+    "player"      "1"
+    "items"       "1"
+    "abilities"   "1"
+  }
+}`,
+    [endpointLabel]
   );
 
   function handleSave() {
@@ -51,6 +55,43 @@ export default function Settings() {
     writePreference(PREFERENCE_KEYS.ambientMotion, ambientMotion);
     setSavedMessage("Configuration saved.");
     window.setTimeout(() => setSavedMessage(""), 1800);
+  }
+
+  async function handleAutoSetupGsi() {
+    if (!window.electronAPI?.gsi?.setupDotaConfig) {
+      setGsiSetupVariant("error");
+      setGsiSetupMessage("Auto setup is only available in the Electron desktop app.");
+      return;
+    }
+
+    setGsiSetupVariant("pending");
+    setGsiSetupMessage("Creating the Dota GSI config file...");
+
+    try {
+      const result = await window.electronAPI.gsi.setupDotaConfig();
+
+      if (result?.ok) {
+        setGsiSetupVariant("success");
+        setGsiSetupMessage(
+          result.filePath
+            ? `Created ${result.filePath}`
+            : result.message || "Dota GSI config created."
+        );
+        return;
+      }
+
+      if (result?.canceled) {
+        setGsiSetupVariant("idle");
+        setGsiSetupMessage(result.message || "Auto setup canceled.");
+        return;
+      }
+
+      setGsiSetupVariant("error");
+      setGsiSetupMessage(result?.message || "Failed to create the Dota GSI config file.");
+    } catch (error) {
+      setGsiSetupVariant("error");
+      setGsiSetupMessage(error?.message || "Failed to create the Dota GSI config file.");
+    }
   }
 
   return (
@@ -174,8 +215,32 @@ export default function Settings() {
             </div>
 
             <div className="settings-callout">
-              <strong>Dota launch option required</strong>
-              <p>Add `-gamestateintegration` to Dota 2 launch options in Steam, then restart Dota.</p>
+              <strong>Auto setup writes the config file for you</strong>
+              <p>
+                If Dota still does not send packets after setup, restart the game and add
+                `-gamestateintegration` in Steam launch options as a fallback.
+              </p>
+            </div>
+
+            <div className="settings-action-row">
+              <button
+                type="button"
+                className="surface-tertiary-button settings-gsi-button"
+                onClick={handleAutoSetupGsi}
+              >
+                Auto Setup Dota GSI
+              </button>
+              <span
+                className={`settings-inline-message ${
+                  gsiSetupVariant === "success"
+                    ? "settings-inline-message--success"
+                    : gsiSetupVariant === "error"
+                      ? "settings-inline-message--error"
+                      : ""
+                }`}
+              >
+                {gsiSetupMessage || "Generates the GSI config file inside the detected Dota folder."}
+              </span>
             </div>
 
             <div className="settings-runtime-list">

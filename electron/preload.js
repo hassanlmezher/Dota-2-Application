@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     start: () => ipcRenderer.invoke("gsi:start"),
     getState: () => ipcRenderer.invoke("gsi:get-latest-state"),
     getStatus: () => ipcRenderer.invoke("gsi:get-status"),
+    setupDotaConfig: () => ipcRenderer.invoke("gsi:setup-dota-config"),
     onState: (callback) => subscribe("gsi:state", callback),
     onStatus: (callback) => subscribe("gsi:status", callback),
   },

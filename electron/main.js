@@ -1,4 +1,6 @@
-const { app, ipcMain } = require("electron");
+const { app, dialog, ipcMain } = require("electron");
+const fs = require("node:fs");
+const path = require("node:path");
 const { createGsiServer } = require("./gsiServer.js");
 const {
   broadcastToWindows,
@@ -14,9 +16,151 @@ const {
 } = require("./windowManager.js");
 
 const GSI_PORT = Number(process.env.VITE_GSI_PORT || 3001);
+const GSI_FILE_NAME = "gamestate_integration_dota_helper.cfg";
+const GSI_CONFIG_CONTENT = `"DotaHelper"
+{
+  "uri"           "http://127.0.0.1:${GSI_PORT}/gsi"
+  "timeout"       "5.0"
+  "buffer"        "0.1"
+  "throttle"      "0.1"
+  "heartbeat"     "30.0"
+  "data"
+  {
+    "provider"    "1"
+    "map"         "1"
+    "draft"       "1"
+    "hero"        "1"
+    "player"      "1"
+    "items"       "1"
+    "abilities"   "1"
+  }
+}
+`;
 
 let latestMatchState = null;
 let gsiServer = null;
+
+function getDotaInstallCandidates() {
+  const homeDirectory = app.getPath("home");
+
+  if (process.platform === "darwin") {
+    return [
+      path.join(
+        homeDirectory,
+        "Library",
+        "Application Support",
+        "Steam",
+        "steamapps",
+        "common",
+        "dota 2 beta"
+      ),
+      path.join(
+        homeDirectory,
+        "Library",
+        "Application Support",
+        "Steam",
+        "SteamApps",
+        "common",
+        "dota 2 beta"
+      ),
+    ];
+  }
+
+  if (process.platform === "win32") {
+    const programFilesX86 = process.env["ProgramFiles(x86)"];
+    const programFiles = process.env.ProgramFiles;
+
+    return [
+      programFilesX86 && path.join(programFilesX86, "Steam", "steamapps", "common", "dota 2 beta"),
+      programFiles && path.join(programFiles, "Steam", "steamapps", "common", "dota 2 beta"),
+      path.join(homeDirectory, "AppData", "Local", "Steam", "steamapps", "common", "dota 2 beta"),
+    ].filter(Boolean);
+  }
+
+  return [
+    path.join(homeDirectory, ".steam", "steam", "steamapps", "common", "dota 2 beta"),
+    path.join(homeDirectory, ".local", "share", "Steam", "steamapps", "common", "dota 2 beta"),
+  ];
+}
+
+function resolveGsiDirectoryFromSelection(selectedPath) {
+  const normalizedPath = path.resolve(selectedPath);
+
+  const exactGsiDirectory = path.basename(normalizedPath) === "gamestate_integration";
+  if (exactGsiDirectory) {
+    return normalizedPath;
+  }
+
+  const cfgDirectory = path.basename(normalizedPath) === "cfg";
+  if (cfgDirectory) {
+    return path.join(normalizedPath, "gamestate_integration");
+  }
+
+  const dotaRootCandidate = path.join(
+    normalizedPath,
+    "game",
+    "dota",
+    "cfg",
+    "gamestate_integration"
+  );
+
+  if (
+    fs.existsSync(path.join(normalizedPath, "game")) ||
+    fs.existsSync(path.join(normalizedPath, "dota.sh")) ||
+    fs.existsSync(path.join(normalizedPath, "dota"))
+  ) {
+    return dotaRootCandidate;
+  }
+
+  return null;
+}
+
+async function chooseDotaFolderInteractively() {
+  const result = await dialog.showOpenDialog({
+    title: "Select Dota 2 folder or cfg folder",
+    properties: ["openDirectory", "createDirectory"],
+    buttonLabel: "Use Folder",
+  });
+
+  if (result.canceled || !result.filePaths.length) {
+    return null;
+  }
+
+  return resolveGsiDirectoryFromSelection(result.filePaths[0]);
+}
+
+async function setupDotaGsiConfig() {
+  const existingInstall = getDotaInstallCandidates().find((candidatePath) =>
+    fs.existsSync(candidatePath)
+  );
+
+  let gsiDirectory = existingInstall
+    ? path.join(existingInstall, "game", "dota", "cfg", "gamestate_integration")
+    : null;
+
+  if (!gsiDirectory) {
+    gsiDirectory = await chooseDotaFolderInteractively();
+  }
+
+  if (!gsiDirectory) {
+    return {
+      ok: false,
+      canceled: true,
+      message: "No Dota 2 folder selected.",
+    };
+  }
+
+  fs.mkdirSync(gsiDirectory, { recursive: true });
+
+  const filePath = path.join(gsiDirectory, GSI_FILE_NAME);
+  fs.writeFileSync(filePath, GSI_CONFIG_CONTENT, "utf8");
+
+  return {
+    ok: true,
+    filePath,
+    message: "Dota GSI config created.",
+  };
+}
 
 function registerIpcHandlers() {
   ipcMain.handle("app:get-info", () => ({
@@ -45,6 +189,18 @@ function registerIpcHandlers() {
     endpoint: `http://127.0.0.1:${GSI_PORT}/gsi`,
     lastReceivedAt: null,
     packetCount: 0,
+  });
+
+  ipcMain.handle("gsi:setup-dota-config", async () => {
+    try {
+      return await setupDotaGsiConfig();
+    } catch (error) {
+      return {
+        ok: false,
+        canceled: false,
+        message: error?.message || "Failed to create Dota GSI config.",
+      };
+    }
   });
 
   ipcMain.handle("window:toggle-overlay", async () => {
