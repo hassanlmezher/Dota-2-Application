@@ -10,6 +10,7 @@ const {
   getOverlayState,
   getOverlayWindow,
   hideOverlayWindow,
+  moveOverlayWindow,
   notifyOverlayState,
   setOverlayMode,
   showOverlayWindow,
@@ -297,6 +298,10 @@ function registerIpcHandlers() {
     setOverlayMode(mode);
     showOverlayWindow(mode);
     return getOverlayState();
+  });
+
+  ipcMain.handle("window:move-overlay", (_event, coordinates) => {
+    return moveOverlayWindow(coordinates?.x, coordinates?.y);
   });
 
   ipcMain.handle("window:focus-main", () => {

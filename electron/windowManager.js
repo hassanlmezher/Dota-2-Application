@@ -109,6 +109,28 @@ function calculateBoundsForMode(mode) {
   };
 }
 
+function moveOverlayWindow(nextX, nextY) {
+  if (!overlayWindow || overlayWindow.isDestroyed()) {
+    return getOverlayState();
+  }
+
+  const display = getOverlayDisplayArea();
+  const currentBounds = overlayWindow.getBounds();
+  const x = clamp(
+    Math.round(nextX),
+    display.x + 12,
+    display.x + display.width - currentBounds.width - 12
+  );
+  const y = clamp(
+    Math.round(nextY),
+    display.y + 12,
+    display.y + display.height - currentBounds.height - 12
+  );
+
+  overlayWindow.setPosition(x, y, true);
+  return notifyOverlayState();
+}
+
 function notifyOverlayState() {
   const state = getOverlayState();
 
@@ -266,6 +288,7 @@ module.exports = {
   getOverlayState,
   getOverlayWindow,
   hideOverlayWindow,
+  moveOverlayWindow,
   notifyOverlayState,
   setOverlayMode,
   showOverlayWindow,

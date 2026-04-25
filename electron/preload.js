@@ -28,6 +28,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     hideOverlay: () => ipcRenderer.invoke("window:hide-overlay"),
     getOverlayState: () => ipcRenderer.invoke("window:get-overlay-state"),
     setOverlayMode: (mode) => ipcRenderer.invoke("window:set-overlay-mode", mode),
+    moveOverlay: (coordinates) => ipcRenderer.invoke("window:move-overlay", coordinates),
     focusMain: () => ipcRenderer.invoke("window:focus-main"),
     onOverlayState: (callback) => subscribe("overlay:state", callback),
   },

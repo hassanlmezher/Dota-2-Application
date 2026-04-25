@@ -86,6 +86,10 @@ export function useGSIListener({ autoStart = true } = {}) {
     return window.electronAPI?.window?.setOverlayMode?.(mode);
   }
 
+  async function moveOverlay(x, y) {
+    return window.electronAPI?.window?.moveOverlay?.({ x, y });
+  }
+
   async function focusMainWindow() {
     return window.electronAPI?.window?.focusMain?.();
   }
@@ -96,6 +100,7 @@ export function useGSIListener({ autoStart = true } = {}) {
     overlayState,
     focusMainWindow,
     hideOverlay,
+    moveOverlay,
     setOverlayMode,
     showOverlay,
     toggleOverlay,
