@@ -1,13 +1,13 @@
-import { app, ipcMain } from "electron";
-import { createGsiServer } from "./gsiServer.js";
-import {
+const { app, ipcMain } = require("electron");
+const { createGsiServer } = require("./gsiServer.js");
+const {
   broadcastToWindows,
   createMainWindow,
   ensureOverlayWindow,
   getOverlayWindow,
   hideOverlayWindow,
   showOverlayWindow,
-} from "./windowManager.js";
+} = require("./windowManager.js");
 
 const GSI_PORT = Number(process.env.VITE_GSI_PORT || 3001);
 

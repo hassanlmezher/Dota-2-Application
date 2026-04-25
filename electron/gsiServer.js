@@ -1,5 +1,5 @@
-import express from "express";
-import { EventEmitter } from "node:events";
+const express = require("express");
+const { EventEmitter } = require("node:events");
 
 function normalizeCollection(collection = {}) {
   if (Array.isArray(collection)) {
@@ -135,17 +135,30 @@ function createGsiServer({ port = 3001, host = "127.0.0.1" } = {}) {
       return getStatus();
     }
 
+    const runningServer = server;
+
     await new Promise((resolve, reject) => {
-      server.close((error) => {
-        if (error) {
-          reject(error);
+      try {
+        runningServer.close((error) => {
+          if (error && error.code !== "ERR_SERVER_NOT_RUNNING") {
+            reject(error);
+            return;
+          }
+
+          server = null;
+          emitter.emit("status", getStatus());
+          resolve();
+        });
+      } catch (error) {
+        if (error.code === "ERR_SERVER_NOT_RUNNING") {
+          server = null;
+          emitter.emit("status", getStatus());
+          resolve();
           return;
         }
 
-        server = null;
-        emitter.emit("status", getStatus());
-        resolve();
-      });
+        reject(error);
+      }
     });
 
     return getStatus();
@@ -177,4 +190,4 @@ function createGsiServer({ port = 3001, host = "127.0.0.1" } = {}) {
   };
 }
 
-export { createGsiServer };
+module.exports = { createGsiServer };

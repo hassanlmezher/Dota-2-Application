@@ -1,4 +1,4 @@
-import { BrowserWindow, screen } from "electron";
+const { BrowserWindow, screen } = require("electron");
 
 function createOverlayWindow({ preloadPath }) {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
@@ -40,4 +40,4 @@ function createOverlayWindow({ preloadPath }) {
   return overlayWindow;
 }
 
-export { createOverlayWindow };
+module.exports = { createOverlayWindow };

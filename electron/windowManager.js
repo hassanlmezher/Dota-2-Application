@@ -1,10 +1,7 @@
-import { BrowserWindow, shell } from "electron";
-import path from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
-import { createOverlayWindow } from "./overlayWindow.js";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const { BrowserWindow, shell } = require("electron");
+const path = require("node:path");
+const { pathToFileURL } = require("node:url");
+const { createOverlayWindow } = require("./overlayWindow.js");
 
 const preloadPath = path.join(__dirname, "preload.js");
 const distIndexPath = path.join(__dirname, "..", "dist", "index.html");
@@ -124,7 +121,7 @@ function broadcastToWindows(channel, payload) {
   }
 }
 
-export {
+module.exports = {
   broadcastToWindows,
   createMainWindow,
   ensureOverlayWindow,
