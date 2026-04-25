@@ -1,0 +1,43 @@
+{
+  "appId": "com.hassanmezher.dotahelper",
+  "productName": "Dota Helper App",
+  "directories": {
+    "buildResources": "public",
+    "output": "release"
+  },
+  "files": [
+    "dist/**/*",
+    "electron/**/*",
+    "package.json"
+  ],
+  "extraMetadata": {
+    "main": "electron/main.js"
+  },
+  "asar": true,
+  "mac": {
+    "target": [
+      "dmg"
+    ],
+    "category": "public.app-category.games",
+    "icon": "public/icons/icon.icns"
+  },
+  "win": {
+    "target": [
+      {
+        "target": "appx",
+        "arch": [
+          "x64"
+        ]
+      }
+    ],
+    "icon": "public/icons/icon.ico"
+  },
+  "appx": {
+    "identityName": "com.yourcompany.dotahelperapp",
+    "publisher": "CN=YOUR-PUBLISHER-ID",
+    "publisherDisplayName": "Your Company",
+    "applicationId": "DotaHelperApp",
+    "displayName": "Dota Helper App",
+    "backgroundColor": "#0b1020"
+  }
+}

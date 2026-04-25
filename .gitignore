@@ -1,0 +1,15 @@
+node_modules
+dist
+dist-electron
+release
+*.log
+.DS_Store
+coverage
+out
+
+# Local secrets
+.env.local
+.env.*.local
+.env
+
+
