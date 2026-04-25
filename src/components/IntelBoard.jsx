@@ -390,7 +390,11 @@ export default function IntelBoard({
               ) : (
                 <EmptyCard
                   title={`${enemyLabel} health feed inactive`}
-                  description="If your GSI payload includes visible hero health, this panel will update live."
+                  description={
+                    audienceMode === "spectator"
+                      ? "If the observer payload includes visible hero health, this panel will update live."
+                      : "This payload currently does not include enemy hero health. Player-mode GSI often only exposes your local hero unless Dota sends visible enemy data."
+                  }
                 />
               )}
             </section>

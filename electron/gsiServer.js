@@ -37,6 +37,58 @@ function toNumber(value) {
   return Number.isFinite(numericValue) ? numericValue : null;
 }
 
+function normalizeTeam(value) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const normalizedValue = String(value).trim().toLowerCase();
+
+  if (
+    normalizedValue === "2" ||
+    normalizedValue.includes("team2") ||
+    normalizedValue.includes("radiant") ||
+    normalizedValue.includes("goodguys")
+  ) {
+    return "Radiant";
+  }
+
+  if (
+    normalizedValue === "3" ||
+    normalizedValue.includes("team3") ||
+    normalizedValue.includes("dire") ||
+    normalizedValue.includes("badguys")
+  ) {
+    return "Dire";
+  }
+
+  if (normalizedValue.includes("enemy")) {
+    return "Enemy";
+  }
+
+  return String(value);
+}
+
+function isOpposingTeam(team, localTeam) {
+  if (!team || !localTeam) {
+    return false;
+  }
+
+  if (team === "Enemy") {
+    return true;
+  }
+
+  if (localTeam === "Radiant") {
+    return team === "Dire";
+  }
+
+  if (localTeam === "Dire") {
+    return team === "Radiant";
+  }
+
+  return false;
+}
+
 function normalizeNamedEntity(entity, fallbackName = "") {
   if (!entity) {
     return null;
@@ -75,14 +127,18 @@ function normalizeState(payload) {
   const observerItemGroups = Array.isArray(payload.items) ? payload.items : [];
   const heroEntries = toEntityArray(payload.heroes).length
     ? toEntityArray(payload.heroes)
-    : toEntityArray(payload.hero);
+    : Array.isArray(payload.hero)
+      ? toEntityArray(payload.hero)
+      : [];
   const playerEntries = toEntityArray(payload.players).length
     ? toEntityArray(payload.players)
-    : toEntityArray(payload.player);
+    : Array.isArray(payload.player)
+      ? toEntityArray(payload.player)
+      : [];
   const heroes = heroEntries.map((entry, index) => ({
     id: entry.id || entry.hero_id || null,
     name: entry.localized_name || entry.name || "Unknown Hero",
-    team: entry.team_name || entry.team || null,
+    team: normalizeTeam(entry.team_name || entry.team || entry.team_id),
     alive: entry.alive,
     health: toNumber(entry.health || entry.player_health || entry.hp),
     maxHealth: toNumber(entry.max_health || entry.maxHealth || entry.health_max),
@@ -109,8 +165,9 @@ function normalizeState(payload) {
   const players = playerEntries.map((entry, index) => ({
     steamId: entry.steamid || entry.steam_id || null,
     heroId: entry.hero_id || null,
-    team: entry.team_name || entry.team || null,
-    heroName: entry.hero_name || entry.localized_name || entry.name || null,
+    team: normalizeTeam(entry.team_name || entry.team || entry.team_id),
+    heroName: entry.hero_name || entry.localized_name || null,
+    playerName: entry.name || entry.player_name || entry.steam_name || null,
     health: toNumber(entry.health || entry.player_health || entry.hp),
     maxHealth: toNumber(entry.max_health || entry.maxHealth || entry.health_max),
     healthPercent:
@@ -132,21 +189,26 @@ function normalizeState(payload) {
         observerItemGroups[index]
     ),
     raw: entry,
-  }));
+  })).filter(
+    (entry) =>
+      Boolean(entry.heroId || entry.heroName || entry.imageUrl || entry.items.length)
+  );
   const localTeam = Array.isArray(payload.player)
     ? null
-    : payload.player?.team_name || payload.player?.team || payload.hero?.team_name || payload.hero?.team;
-  const enemyMatcher = !localTeam
-    ? /dire|enemy/i
-    : /radiant/i.test(localTeam)
-      ? /dire|enemy/i
-      : /radiant|enemy/i;
+    : normalizeTeam(
+        payload.player?.team_name ||
+          payload.player?.team ||
+          payload.player?.team_id ||
+          payload.hero?.team_name ||
+          payload.hero?.team ||
+          payload.hero?.team_id
+      );
   const enemyHeroes = !localTeam
     ? heroes
-    : heroes.filter((entry) => enemyMatcher.test(entry.team || ""));
+    : heroes.filter((entry) => isOpposingTeam(entry.team, localTeam));
   const enemyPlayers = !localTeam
     ? players
-    : players.filter((entry) => enemyMatcher.test(entry.team || ""));
+    : players.filter((entry) => isOpposingTeam(entry.team, localTeam));
 
   return {
     raw: payload,
@@ -190,6 +252,7 @@ function createGsiServer({ port = 3001, host = "127.0.0.1" } = {}) {
     latestState = normalizeState(request.body || {});
     packetCount += 1;
     emitter.emit("state", latestState);
+    emitter.emit("status", getStatus());
 
     response.json({
       ok: true,

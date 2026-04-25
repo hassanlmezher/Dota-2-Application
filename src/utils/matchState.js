@@ -10,6 +10,58 @@ function normalizeText(value = "") {
   return String(value).trim().toLowerCase();
 }
 
+function normalizeTeam(value) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const normalizedValue = normalizeText(value);
+
+  if (
+    normalizedValue === "2" ||
+    normalizedValue.includes("team2") ||
+    normalizedValue.includes("radiant") ||
+    normalizedValue.includes("goodguys")
+  ) {
+    return "Radiant";
+  }
+
+  if (
+    normalizedValue === "3" ||
+    normalizedValue.includes("team3") ||
+    normalizedValue.includes("dire") ||
+    normalizedValue.includes("badguys")
+  ) {
+    return "Dire";
+  }
+
+  if (normalizedValue.includes("enemy")) {
+    return "Enemy";
+  }
+
+  return String(value);
+}
+
+function isOpposingTeam(team, localTeam) {
+  if (!team || !localTeam) {
+    return false;
+  }
+
+  if (team === "Enemy") {
+    return true;
+  }
+
+  if (localTeam === "Radiant") {
+    return team === "Dire";
+  }
+
+  if (localTeam === "Dire") {
+    return team === "Radiant";
+  }
+
+  return false;
+}
+
 function formatGameStateLabel(gameState = "") {
   if (!gameState) {
     return "No match detected";
@@ -55,14 +107,18 @@ function normalizeInventory(items = []) {
 
 function normalizeHeroEntry(entry = {}, index = 0) {
   const name = formatHeroName(
-    entry.name || entry.localized_name || entry.heroName || entry.hero_name || `Hero ${index + 1}`
+    entry.heroName ||
+      entry.hero_name ||
+      entry.localized_name ||
+      entry.name ||
+      `Hero ${index + 1}`
   );
 
   return {
     id: toNumber(entry.id ?? entry.heroId ?? entry.hero_id),
     name,
     imageUrl: entry.imageUrl || entry.image_url || entry.image || null,
-    team: entry.team || entry.team_name || null,
+    team: normalizeTeam(entry.team || entry.team_name || entry.team_id),
     health: toNumber(entry.health ?? entry.player_health ?? entry.hp),
     maxHealth: toNumber(entry.maxHealth ?? entry.max_health ?? entry.health_max),
     healthPercent: calculateHealthPercent(entry),
@@ -148,6 +204,14 @@ function chooseTrackedHeroes({
   }
 
   if (localTeam && visibleHeroes.length) {
+    const opposingVisibleHeroes = visibleHeroes.filter((entry) =>
+      isOpposingTeam(entry.team, localTeam)
+    );
+
+    if (opposingVisibleHeroes.length) {
+      return opposingVisibleHeroes;
+    }
+
     return visibleHeroes.filter((entry) => {
       if (localHeroId && entry.id) {
         return String(entry.id) !== String(localHeroId);
@@ -162,6 +226,108 @@ function chooseTrackedHeroes({
   }
 
   return visibleHeroes;
+}
+
+function extractDraftHeroes(draft, localTeam) {
+  if (!draft || typeof draft !== "object") {
+    return [];
+  }
+
+  const candidates = [];
+  const queue = [{ value: draft, path: "draft" }];
+  const seenObjects = new Set();
+
+  while (queue.length) {
+    const current = queue.shift();
+
+    if (!current || !current.value || typeof current.value !== "object") {
+      continue;
+    }
+
+    if (seenObjects.has(current.value)) {
+      continue;
+    }
+
+    seenObjects.add(current.value);
+
+    if (Array.isArray(current.value)) {
+      current.value.forEach((entry, index) => {
+        queue.push({ value: entry, path: `${current.path}[${index}]` });
+      });
+      continue;
+    }
+
+    const heroLikeId = toNumber(
+      current.value.hero_id ??
+        current.value.heroId ??
+        current.value.id
+    );
+    const heroLikeName = current.value.hero_name || current.value.heroName || current.value.localized_name || current.value.name;
+    const team = normalizeTeam(
+      current.value.team ||
+        current.value.team_name ||
+        current.value.team_id ||
+        (current.path.includes("radiant") || current.path.includes("team2")
+          ? "Radiant"
+          : current.path.includes("dire") || current.path.includes("team3")
+            ? "Dire"
+            : null)
+    );
+    const pathText = normalizeText(current.path);
+    const stateText = normalizeText(
+      current.value.state || current.value.type || current.value.status || ""
+    );
+    const isBanned =
+      current.value.banned === true ||
+      current.value.is_ban === true ||
+      pathText.includes("ban") ||
+      stateText.includes("ban");
+    const isPicked =
+      current.value.selected === true ||
+      current.value.picked === true ||
+      current.value.is_pick === true ||
+      current.value.is_selected === true ||
+      pathText.includes("pick") ||
+      stateText.includes("pick");
+
+    if (!isBanned && (heroLikeId !== null || heroLikeName) && isPicked) {
+      candidates.push(
+        normalizeHeroEntry(
+          {
+            id: heroLikeId,
+            heroName: heroLikeName,
+            team,
+            imageUrl: current.value.image_url || current.value.image || null,
+          },
+          candidates.length
+        )
+      );
+    }
+
+    Object.entries(current.value).forEach(([key, value]) => {
+      if (value && typeof value === "object") {
+        queue.push({ value, path: `${current.path}.${key}` });
+      }
+    });
+  }
+
+  const uniqueHeroes = [];
+
+  for (const hero of candidates) {
+    const alreadyIncluded = uniqueHeroes.some((existingHero) => entityMatches(existingHero, hero));
+
+    if (!alreadyIncluded) {
+      uniqueHeroes.push(hero);
+    }
+  }
+
+  if (!localTeam) {
+    return uniqueHeroes;
+  }
+
+  const enemyDraftHeroes = uniqueHeroes.filter((hero) => isOpposingTeam(hero.team, localTeam));
+
+  return enemyDraftHeroes.length ? enemyDraftHeroes : uniqueHeroes;
 }
 
 function detectPhase({
@@ -244,13 +410,27 @@ function deriveMatchInsights(matchState) {
   const map = matchState?.map || {};
   const hero = matchState?.hero || {};
   const player = matchState?.player || {};
-  const localTeam = matchState?.localTeam || hero.team || player.team_name || player.team || null;
+  const localTeam = normalizeTeam(
+    matchState?.localTeam ||
+      hero.team ||
+      hero.team_name ||
+      hero.team_id ||
+      player.team_name ||
+      player.team ||
+      player.team_id ||
+      null
+  );
   const localHeroId = toNumber(hero.id ?? player.hero_id);
   const localHeroName = formatHeroName(hero.name || player.hero_name || "Unknown Hero");
   const visibleHeroEntries = (matchState?.heroes || []).map(normalizeHeroEntry);
   const visiblePlayerEntries = (matchState?.players || []).map(normalizeHeroEntry);
   const visibleHeroes = mergeVisibleHeroes(visibleHeroEntries, visiblePlayerEntries);
-  const explicitEnemyHeroes = (matchState?.enemyHeroes || []).map(normalizeHeroEntry);
+  const draftEnemyHeroes = extractDraftHeroes(matchState?.draft, localTeam);
+  const explicitEnemyHeroes = (
+    (matchState?.enemyHeroes && matchState.enemyHeroes.length)
+      ? matchState.enemyHeroes
+      : draftEnemyHeroes
+  ).map(normalizeHeroEntry);
   const explicitEnemyPlayers = (matchState?.enemyPlayers || []).map(normalizeHeroEntry);
   const trackedHeroes = chooseTrackedHeroes({
     localTeam,
