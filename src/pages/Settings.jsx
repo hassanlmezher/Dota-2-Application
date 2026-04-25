@@ -3,6 +3,7 @@ import { Link, useOutletContext } from "react-router-dom";
 import { ROLES, ROLE_LOOKUP } from "../constants/roles";
 import { hasCredentials } from "../api/supabaseClient";
 import { PREFERENCE_KEYS, readPreference, writePreference } from "../utils/preferences";
+import { setupDotaGsi } from "../utils/setupDotaGsi";
 
 export default function Settings() {
   const gsi = useOutletContext();
@@ -58,17 +59,11 @@ export default function Settings() {
   }
 
   async function handleAutoSetupGsi() {
-    if (!window.electronAPI?.gsi?.setupDotaConfig) {
-      setGsiSetupVariant("error");
-      setGsiSetupMessage("Auto setup is only available in the Electron desktop app.");
-      return;
-    }
-
     setGsiSetupVariant("pending");
     setGsiSetupMessage("Creating the Dota GSI config file...");
 
     try {
-      const result = await window.electronAPI.gsi.setupDotaConfig();
+      const result = await setupDotaGsi(gsiConfigSnippet);
 
       if (result?.ok) {
         setGsiSetupVariant("success");
@@ -215,10 +210,10 @@ export default function Settings() {
             </div>
 
             <div className="settings-callout">
-              <strong>Auto setup writes the config file for you</strong>
+              <strong>Auto setup works in desktop and browser preview</strong>
               <p>
-                If Dota still does not send packets after setup, restart the game and add
-                `-gamestateintegration` in Steam launch options as a fallback.
+                Electron writes directly to the detected Dota folder. Browser preview asks
+                for a Dota folder when possible, or downloads the `.cfg` file as a fallback.
               </p>
             </div>
 
@@ -239,7 +234,8 @@ export default function Settings() {
                       : ""
                 }`}
               >
-                {gsiSetupMessage || "Generates the GSI config file inside the detected Dota folder."}
+                {gsiSetupMessage ||
+                  "Writes to Dota automatically in Electron, or saves/downloads the config in browser mode."}
               </span>
             </div>
 
