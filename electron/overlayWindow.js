@@ -1,23 +1,21 @@
-const { BrowserWindow, screen } = require("electron");
+const { BrowserWindow } = require("electron");
 
-function createOverlayWindow({ preloadPath }) {
-  const { width, height } = screen.getPrimaryDisplay().workAreaSize;
-
+function createOverlayWindow({ preloadPath, bounds }) {
   const overlayWindow = new BrowserWindow({
-    width: Math.min(460, width),
-    height: Math.min(780, height),
-    x: Math.max(width - 500, 24),
-    y: 24,
+    width: bounds.width,
+    height: bounds.height,
+    x: bounds.x,
+    y: bounds.y,
     frame: false,
     transparent: true,
-    resizable: true,
+    resizable: false,
     movable: true,
     minimizable: false,
     maximizable: false,
     closable: true,
     show: false,
     skipTaskbar: true,
-    focusable: false,
+    focusable: true,
     alwaysOnTop: true,
     title: "Dota Helper Overlay",
     backgroundColor: "#00000000",
@@ -29,13 +27,8 @@ function createOverlayWindow({ preloadPath }) {
     },
   });
 
-  overlayWindow.setIgnoreMouseEvents(true, { forward: true });
   overlayWindow.setAlwaysOnTop(true, "screen-saver");
   overlayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-
-  overlayWindow.once("ready-to-show", () => {
-    overlayWindow.showInactive();
-  });
 
   return overlayWindow;
 }

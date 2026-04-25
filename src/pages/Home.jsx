@@ -1,113 +1,139 @@
-import { Link } from "react-router-dom";
-
-function readRecentSearches(storageKey) {
-  try {
-    const value = window.localStorage.getItem(storageKey);
-    return value ? JSON.parse(value) : [];
-  } catch {
-    return [];
-  }
-}
+import { useState } from "react";
+import { Link, useOutletContext } from "react-router-dom";
+import IntelBoard from "../components/IntelBoard";
+import { ROLE_LOOKUP } from "../constants/roles";
+import { PREFERENCE_KEYS, readPreference, writePreference } from "../utils/preferences";
 
 export default function Home() {
-  const recentPickSearches = readRecentSearches("dota-helper:recent-counter-searches");
-  const recentItemSearches = readRecentSearches("dota-helper:recent-item-searches");
+  const gsi = useOutletContext();
+  const rememberStartedState = readPreference(PREFERENCE_KEYS.overlayOnLaunch, true);
+  const ambientMotion = readPreference(PREFERENCE_KEYS.ambientMotion, true);
+  const [started, setStarted] = useState(
+    rememberStartedState ? readPreference(PREFERENCE_KEYS.overlayStarted, false) : false
+  );
+  const [role, setRole] = useState(readPreference(PREFERENCE_KEYS.defaultRole, "carry"));
+
+  async function handlePrimaryAction() {
+    const nextStarted = true;
+    setStarted(nextStarted);
+
+    if (rememberStartedState) {
+      writePreference(PREFERENCE_KEYS.overlayStarted, nextStarted);
+    }
+
+    if (gsi?.overlayState?.visible) {
+      await gsi.hideOverlay();
+      return;
+    }
+
+    const bootMode = readPreference(PREFERENCE_KEYS.overlayBootMode, "launcher");
+    await gsi.showOverlay(bootMode);
+  }
+
+  function handleRoleChange(nextRole) {
+    setRole(nextRole);
+    writePreference(PREFERENCE_KEYS.defaultRole, nextRole);
+  }
 
   return (
-    <section className="page page-home">
-      <div className="hero-banner">
-        <div>
-          <p className="eyebrow">Draft Faster. Buy Smarter.</p>
-          <h1>Dota match prep with live overlay support.</h1>
-          <p className="page-lead">
-            Search counters from your Supabase matchup data, surface item responses,
-            and keep a compact overlay pinned on top of the game.
-          </p>
+    <section
+      className={`surface-page ${ambientMotion ? "surface-page--ambient" : ""}`}
+    >
+      <header className="surface-nav">
+        <div className="surface-nav__brand">
+          <span className="surface-nav__eyebrow">DOTA HELPER</span>
+          <strong>Aether Draft Engine</strong>
         </div>
 
-        <div className="hero-actions">
-          <Link to="/pick-assistant" className="button button-primary">
-            Open Pick Assistant
-          </Link>
-          <Link to="/item-assistant" className="button button-secondary">
-            Open Item Assistant
+        <div className="surface-nav__actions">
+          <span
+            className={`status-pill ${
+              gsi?.serverStatus?.running ? "status-pill--online" : "status-pill--offline"
+            }`}
+          >
+            {gsi?.serverStatus?.running ? "GSI Online" : "GSI Offline"}
+          </span>
+          <Link to="/settings" className="surface-icon-button">
+            Settings
           </Link>
         </div>
-      </div>
+      </header>
 
-      <div className="dashboard-grid">
-        <article className="panel feature-card">
-          <span className="feature-card__badge">Counter Picks</span>
-          <h2>Build your response to enemy drafts</h2>
+      <section className="landing-hero">
+        <div className="landing-hero__overlay" />
+        <div className="landing-hero__content">
+          <span className="landing-badge">Dota 2 Overlay Assistant</span>
+          <h1>Dota Helper Overlay</h1>
           <p>
-            Select a role, add enemy heroes, and run the `get_best_counter_picks`
-            RPC to rank the strongest answers.
+            Start with a single Dota-style button. The first toggle spawns a movable
+            launcher on the right edge of the screen. Clicking that launcher opens the
+            compact live panel for picks, enemy HP, and item suggestions.
           </p>
-          <Link to="/pick-assistant" className="button button-ghost">
-            Launch draft tool
-          </Link>
-        </article>
 
-        <article className="panel feature-card">
-          <span className="feature-card__badge feature-card__badge--alt">Items</span>
-          <h2>Turn threats into item timings</h2>
-          <p>
-            Pick your hero, list enemy pressure points, and translate them into item
-            buys with `get_best_items_to_buy`.
-          </p>
-          <Link to="/item-assistant" className="button button-ghost">
-            Launch item tool
-          </Link>
-        </article>
-      </div>
+          <div className="landing-hero__actions">
+            <button type="button" className="dota-cta" onClick={handlePrimaryAction}>
+              <span className="dota-cta__icon">▶</span>
+              <span>{started ? "CHANGE VIEW" : "START OVERLAY"}</span>
+            </button>
 
-      <div className="dashboard-grid">
-        <article className="panel">
-          <div className="section-heading">
-            <h2>Recent Pick Searches</h2>
-            <span>{recentPickSearches.length} saved</span>
+            <Link to="/settings" className="surface-secondary-link">
+              Settings
+            </Link>
           </div>
 
-          {recentPickSearches.length ? (
-            <div className="history-list">
-              {recentPickSearches.slice(0, 5).map((entry) => (
-                <div className="history-row" key={entry.id}>
-                  <div>
-                    <strong>{entry.roleLabel}</strong>
-                    <p>{entry.enemyHeroes.join(", ")}</p>
-                  </div>
-                  <time>{new Date(entry.createdAt).toLocaleString()}</time>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="empty-state">No pick searches saved yet.</p>
-          )}
-        </article>
+          <div className="landing-hero__hint">
+            <strong>Saved role:</strong> {ROLE_LOOKUP[role]}
+          </div>
+        </div>
 
-        <article className="panel">
-          <div className="section-heading">
-            <h2>Recent Item Searches</h2>
-            <span>{recentItemSearches.length} saved</span>
+        <div className="landing-status-pill">
+          OVERLAY: {gsi?.overlayState?.visible ? gsi.overlayState.mode.toUpperCase() : "OFF"}
+        </div>
+      </section>
+
+      {!started ? (
+        <section className="landing-feature-grid">
+          <article className="landing-feature">
+            <span>01</span>
+            <h3>Draft Read</h3>
+            <p>During hero selection the dashboard flips to enemy picks and counter heroes.</p>
+          </article>
+          <article className="landing-feature">
+            <span>02</span>
+            <h3>Live Match</h3>
+            <p>After the horn, the same space shifts into enemy HP and item response signals.</p>
+          </article>
+          <article className="landing-feature">
+            <span>03</span>
+            <h3>Overlay Launcher</h3>
+            <p>A movable side widget keeps the compact view one click away while you play.</p>
+          </article>
+        </section>
+      ) : (
+        <section className="dashboard-surface">
+          <div className="dashboard-surface__header">
+            <div>
+              <p className="intel-kicker">Full Screen View</p>
+              <h2>Match intelligence board</h2>
+            </div>
+            <button
+              type="button"
+              className="surface-tertiary-button"
+              onClick={() => gsi.showOverlay("launcher")}
+            >
+              Show Side Overlay
+            </button>
           </div>
 
-          {recentItemSearches.length ? (
-            <div className="history-list">
-              {recentItemSearches.slice(0, 5).map((entry) => (
-                <div className="history-row" key={entry.id}>
-                  <div>
-                    <strong>{entry.heroName}</strong>
-                    <p>{entry.enemyHeroes.join(", ") || "No enemy heroes selected"}</p>
-                  </div>
-                  <time>{new Date(entry.createdAt).toLocaleString()}</time>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="empty-state">No item searches saved yet.</p>
-          )}
-        </article>
-      </div>
+          <IntelBoard
+            matchState={gsi?.matchState}
+            serverStatus={gsi?.serverStatus}
+            role={role}
+            onRoleChange={handleRoleChange}
+            variant="full"
+          />
+        </section>
+      )}
     </section>
   );
 }

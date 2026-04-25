@@ -1,5 +1,4 @@
 import { Outlet, useLocation } from "react-router-dom";
-import Navbar from "./components/Navbar";
 import { useGSIListener } from "./hooks/useGSIListener";
 
 export default function App() {
@@ -8,15 +7,8 @@ export default function App() {
   const gsi = useGSIListener({ autoStart: true });
 
   return (
-    <div className="app-shell">
-      {!isOverlayRoute ? (
-        <Navbar
-          serverStatus={gsi.serverStatus}
-          onToggleOverlay={() => gsi.toggleOverlay()}
-        />
-      ) : null}
-
-      <main className={isOverlayRoute ? "" : "page-shell"}>
+    <div className={`app-shell ${isOverlayRoute ? "app-shell--overlay" : ""}`}>
+      <main className={isOverlayRoute ? "overlay-shell" : "page-shell"}>
         <Outlet context={gsi} />
       </main>
     </div>

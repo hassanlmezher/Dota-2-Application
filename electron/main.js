@@ -4,8 +4,12 @@ const {
   broadcastToWindows,
   createMainWindow,
   ensureOverlayWindow,
+  focusMainWindow,
+  getOverlayState,
   getOverlayWindow,
   hideOverlayWindow,
+  notifyOverlayState,
+  setOverlayMode,
   showOverlayWindow,
 } = require("./windowManager.js");
 
@@ -42,52 +46,58 @@ function registerIpcHandlers() {
   });
 
   ipcMain.handle("window:toggle-overlay", async () => {
-    if (getOverlayWindow()?.isVisible()) {
-      hideOverlayWindow();
-      return { visible: false };
+    if (getOverlayState().visible) {
+      return hideOverlayWindow();
     }
 
-    const overlayWindow = await ensureOverlayWindow();
+    const overlayWindow = await ensureOverlayWindow("launcher");
 
     if (latestMatchState) {
       overlayWindow.webContents.send("gsi:state", latestMatchState);
     }
 
-    showOverlayWindow();
-    return { visible: true };
+    showOverlayWindow("launcher");
+    return getOverlayState();
   });
 
-  ipcMain.handle("window:show-overlay", async () => {
-    const overlayWindow = await ensureOverlayWindow();
+  ipcMain.handle("window:show-overlay", async (_event, mode = "launcher") => {
+    const overlayWindow = await ensureOverlayWindow(mode);
 
     if (latestMatchState) {
       overlayWindow.webContents.send("gsi:state", latestMatchState);
     }
 
-    showOverlayWindow();
-    return { visible: true };
+    showOverlayWindow(mode);
+    return getOverlayState();
   });
 
   ipcMain.handle("window:hide-overlay", () => {
-    hideOverlayWindow();
-    return { visible: false };
+    return hideOverlayWindow();
+  });
+
+  ipcMain.handle("window:get-overlay-state", () => getOverlayState());
+
+  ipcMain.handle("window:set-overlay-mode", async (_event, mode) => {
+    const overlayWindow = await ensureOverlayWindow(mode);
+
+    if (latestMatchState) {
+      overlayWindow.webContents.send("gsi:state", latestMatchState);
+    }
+
+    setOverlayMode(mode);
+    showOverlayWindow(mode);
+    return getOverlayState();
+  });
+
+  ipcMain.handle("window:focus-main", () => {
+    focusMainWindow();
+    return true;
   });
 }
 
 function handleGsiState(nextState) {
   latestMatchState = nextState;
   broadcastToWindows("gsi:state", nextState);
-
-  ensureOverlayWindow()
-    .then((overlayWindow) => {
-      overlayWindow.webContents.send("gsi:state", nextState);
-      if (!overlayWindow.isVisible()) {
-        showOverlayWindow();
-      }
-    })
-    .catch((error) => {
-      console.error("Failed to update overlay window:", error);
-    });
 }
 
 async function bootstrap() {
@@ -100,6 +110,7 @@ async function bootstrap() {
     broadcastToWindows("gsi:status", status);
   });
   await gsiServer.start();
+  notifyOverlayState();
 }
 
 app.whenReady().then(bootstrap);

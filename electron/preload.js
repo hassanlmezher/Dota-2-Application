@@ -23,7 +23,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
   window: {
     toggleOverlay: () => ipcRenderer.invoke("window:toggle-overlay"),
-    showOverlay: () => ipcRenderer.invoke("window:show-overlay"),
+    showOverlay: (mode) => ipcRenderer.invoke("window:show-overlay", mode),
     hideOverlay: () => ipcRenderer.invoke("window:hide-overlay"),
+    getOverlayState: () => ipcRenderer.invoke("window:get-overlay-state"),
+    setOverlayMode: (mode) => ipcRenderer.invoke("window:set-overlay-mode", mode),
+    focusMain: () => ipcRenderer.invoke("window:focus-main"),
+    onOverlayState: (callback) => subscribe("overlay:state", callback),
   },
 });

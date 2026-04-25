@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Manrope:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Manrope:wght@400;500;600;700&family=Rajdhani:wght@500;600;700&display=swap");
 @import "./dotaTheme.css";
 
 * {
@@ -13,13 +13,9 @@ body,
 }
 
 body {
-  min-height: 100vh;
-  font-family: "Manrope", "Segoe UI", sans-serif;
-  background:
-    radial-gradient(circle at top right, rgba(255, 136, 64, 0.18), transparent 32%),
-    radial-gradient(circle at left center, rgba(65, 170, 132, 0.16), transparent 26%),
-    linear-gradient(180deg, #03060f 0%, #0b1220 100%);
-  color: var(--color-text);
+  font-family: "Manrope", sans-serif;
+  color: #f6efe5;
+  background: transparent;
 }
 
 button,
@@ -39,11 +35,6 @@ a {
 }
 
 img {
-  max-width: 100%;
   display: block;
-}
-
-code,
-pre {
-  font-family: "SFMono-Regular", "SF Mono", Consolas, monospace;
+  max-width: 100%;
 }
