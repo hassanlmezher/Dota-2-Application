@@ -40,30 +40,11 @@ const GSI_CONFIG_CONTENT = `"DotaHelper"
 let latestMatchState = null;
 let gsiServer = null;
 
-function getDotaInstallCandidates() {
+function getSteamRootCandidates() {
   const homeDirectory = app.getPath("home");
 
   if (process.platform === "darwin") {
-    return [
-      path.join(
-        homeDirectory,
-        "Library",
-        "Application Support",
-        "Steam",
-        "steamapps",
-        "common",
-        "dota 2 beta"
-      ),
-      path.join(
-        homeDirectory,
-        "Library",
-        "Application Support",
-        "Steam",
-        "SteamApps",
-        "common",
-        "dota 2 beta"
-      ),
-    ];
+    return [path.join(homeDirectory, "Library", "Application Support", "Steam")];
   }
 
   if (process.platform === "win32") {
@@ -71,16 +52,87 @@ function getDotaInstallCandidates() {
     const programFiles = process.env.ProgramFiles;
 
     return [
-      programFilesX86 && path.join(programFilesX86, "Steam", "steamapps", "common", "dota 2 beta"),
-      programFiles && path.join(programFiles, "Steam", "steamapps", "common", "dota 2 beta"),
-      path.join(homeDirectory, "AppData", "Local", "Steam", "steamapps", "common", "dota 2 beta"),
+      programFilesX86 && path.join(programFilesX86, "Steam"),
+      programFiles && path.join(programFiles, "Steam"),
+      path.join(homeDirectory, "AppData", "Local", "Steam"),
+      path.join(homeDirectory, "AppData", "Roaming", "Steam"),
     ].filter(Boolean);
   }
 
   return [
-    path.join(homeDirectory, ".steam", "steam", "steamapps", "common", "dota 2 beta"),
-    path.join(homeDirectory, ".local", "share", "Steam", "steamapps", "common", "dota 2 beta"),
+    path.join(homeDirectory, ".steam", "steam"),
+    path.join(homeDirectory, ".local", "share", "Steam"),
   ];
+}
+
+function normalizeUniquePaths(paths) {
+  return [...new Set(paths.filter(Boolean).map((candidatePath) => path.normalize(candidatePath)))];
+}
+
+function decodeVdfPath(rawValue) {
+  return path.normalize(rawValue.replace(/\\\\/g, "\\"));
+}
+
+function parseSteamLibraryFolders(vdfContent) {
+  const libraryRoots = new Set();
+
+  for (const match of vdfContent.matchAll(/"path"\s+"([^"]+)"/g)) {
+    const libraryPath = decodeVdfPath(match[1]);
+
+    if (path.isAbsolute(libraryPath)) {
+      libraryRoots.add(libraryPath);
+    }
+  }
+
+  for (const match of vdfContent.matchAll(/"(\d+)"\s+"([^"]+)"/g)) {
+    const libraryPath = decodeVdfPath(match[2]);
+
+    if (path.isAbsolute(libraryPath)) {
+      libraryRoots.add(libraryPath);
+    }
+  }
+
+  return [...libraryRoots];
+}
+
+function getSteamLibraryRoots() {
+  const steamRoots = normalizeUniquePaths(getSteamRootCandidates());
+  const discoveredLibraries = new Set(steamRoots);
+
+  for (const steamRoot of steamRoots) {
+    if (!fs.existsSync(steamRoot)) {
+      continue;
+    }
+
+    const libraryManifestCandidates = [
+      path.join(steamRoot, "steamapps", "libraryfolders.vdf"),
+      path.join(steamRoot, "SteamApps", "libraryfolders.vdf"),
+      path.join(steamRoot, "config", "libraryfolders.vdf"),
+    ];
+
+    for (const manifestPath of libraryManifestCandidates) {
+      if (!fs.existsSync(manifestPath)) {
+        continue;
+      }
+
+      const manifestContent = fs.readFileSync(manifestPath, "utf8");
+
+      for (const libraryRoot of parseSteamLibraryFolders(manifestContent)) {
+        discoveredLibraries.add(libraryRoot);
+      }
+    }
+  }
+
+  return [...discoveredLibraries];
+}
+
+function getDotaInstallCandidates() {
+  return normalizeUniquePaths(
+    getSteamLibraryRoots().flatMap((libraryRoot) => [
+      path.join(libraryRoot, "steamapps", "common", "dota 2 beta"),
+      path.join(libraryRoot, "SteamApps", "common", "dota 2 beta"),
+    ])
+  );
 }
 
 function resolveGsiDirectoryFromSelection(selectedPath) {

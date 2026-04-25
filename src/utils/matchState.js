@@ -169,6 +169,7 @@ function detectPhase({
   clockTime,
   trackedHeroes,
   trackedHealth,
+  draft,
   map,
   provider,
   currentItems,
@@ -180,6 +181,13 @@ function detectPhase({
   const hasTrackedHeroes = trackedHeroes.length > 0;
   const hasTrackedHealth = trackedHealth.length > 0;
   const hasVisibleHeroes = visibleHeroes.length > 0;
+  const hasDraftContext = Boolean(
+    Array.isArray(draft)
+      ? draft.length
+      : draft && typeof draft === "object"
+        ? Object.keys(draft).length
+        : false
+  );
   const hasMapContext = Boolean(
     map?.matchid ||
       map?.match_id ||
@@ -191,24 +199,33 @@ function detectPhase({
   const hasProviderContext = Boolean(provider?.appid || provider?.version || provider?.name);
   const hasLocalContext = Boolean(localHeroId || currentItems.length);
 
-  const isDraftState =
+  const isExplicitDraftState =
     normalizedState.includes("hero_selection") ||
     normalizedState.includes("strategy") ||
-    normalizedState.includes("showcase") ||
+    normalizedState.includes("showcase");
+  const isSetupDraftState =
     normalizedState.includes("wait_for_players") ||
     normalizedState.includes("custom_game_setup");
 
-  const isLiveState =
+  const isExplicitLiveState =
     normalizedState.includes("game_in_progress") ||
     normalizedState.includes("pre_game") ||
     normalizedState.includes("post_game") ||
+    normalizedState.includes("last");
+
+  const isLiveState =
+    isExplicitLiveState ||
     normalizedState.includes("last") ||
     hasClock ||
     hasTrackedHealth ||
     (hasMapContext && (hasVisibleHeroes || hasLocalContext)) ||
     (hasProviderContext && (hasVisibleHeroes || hasLocalContext));
 
-  if (isDraftState && !isLiveState) {
+  if (isExplicitDraftState) {
+    return "draft";
+  }
+
+  if ((isSetupDraftState || hasDraftContext) && !isExplicitLiveState && !hasTrackedHealth) {
     return "draft";
   }
 
@@ -267,6 +284,7 @@ function deriveMatchInsights(matchState) {
     clockTime: map.clock_time,
     trackedHeroes,
     trackedHealth,
+    draft: matchState?.draft,
     map,
     provider: matchState?.provider,
     currentItems,

@@ -7,6 +7,7 @@ import { setupDotaGsi } from "../utils/setupDotaGsi";
 
 export default function Settings() {
   const gsi = useOutletContext();
+  const isElectronRuntime = Boolean(window.electronAPI?.isElectron);
   const [defaultRole, setDefaultRole] = useState(
     readPreference(PREFERENCE_KEYS.defaultRole, "carry")
   );
@@ -116,7 +117,7 @@ export default function Settings() {
 
           <div className="settings-premium-card">
             <strong>Runtime</strong>
-            <span>{window.electronAPI?.isElectron ? "Electron desktop" : "Browser preview"}</span>
+            <span>{isElectronRuntime ? "Electron desktop" : "Browser preview"}</span>
           </div>
         </aside>
 
@@ -210,10 +211,11 @@ export default function Settings() {
             </div>
 
             <div className="settings-callout">
-              <strong>Auto setup works in desktop and browser preview</strong>
+              <strong>{isElectronRuntime ? "One-click desktop setup" : "Browser preview limitations"}</strong>
               <p>
-                Electron writes directly to the detected Dota folder. Browser preview asks
-                for a Dota folder when possible, or downloads the `.cfg` file as a fallback.
+                {isElectronRuntime
+                  ? "The desktop app scans Steam library folders and writes the GSI config automatically."
+                  : "A normal browser cannot silently write into your Dota install, so preview mode may ask for a folder or download the `.cfg` file instead."}
               </p>
             </div>
 
@@ -235,7 +237,9 @@ export default function Settings() {
                 }`}
               >
                 {gsiSetupMessage ||
-                  "Writes to Dota automatically in Electron, or saves/downloads the config in browser mode."}
+                  (isElectronRuntime
+                    ? "The desktop app now scans Steam libraries and should complete setup with one click."
+                    : "Use the Electron desktop app for true one-click setup. Browser mode is sandboxed.")}
               </span>
             </div>
 

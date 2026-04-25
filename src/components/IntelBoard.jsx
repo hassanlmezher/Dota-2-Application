@@ -10,17 +10,18 @@ function Avatar({ imageUrl, label }) {
   return <span className="intel-avatar__fallback">{label.slice(0, 2).toUpperCase()}</span>;
 }
 
-function RolePill({ role, selected, onSelect, compact }) {
+function RoleOrb({ role, selected, onSelect }) {
+  const positionLabel = role.shortLabel.replace(/^Pos\s*/i, "");
+
   return (
     <button
       type="button"
-      className={`intel-role-pill ${selected ? "intel-role-pill--active" : ""} ${
-        compact ? "intel-role-pill--compact" : ""
-      }`}
+      className={selected ? "intel-role-orb intel-role-orb--active" : "intel-role-orb"}
+      aria-label={`${role.label} (${role.shortLabel})`}
+      title={`${role.label} (${role.shortLabel})`}
       onClick={() => onSelect(role.value)}
     >
-      <span>{role.shortLabel}</span>
-      <strong>{role.label}</strong>
+      <span>{positionLabel}</span>
     </button>
   );
 }
@@ -133,6 +134,7 @@ export default function IntelBoard({
   variant = "full",
 }) {
   const compact = variant === "compact";
+  const roleRows = [ROLES.slice(0, 3), ROLES.slice(3)];
   const hasPackets = Boolean(serverStatus?.packetCount);
   const {
     phase,
@@ -155,13 +157,15 @@ export default function IntelBoard({
   } = useOverlayInsights({
     matchState,
     role,
-    counterLimit: compact ? 3 : 5,
+    counterLimit: compact ? 6 : 8,
     itemLimit: compact ? 4 : 6,
   });
   const [activeTab, setActiveTab] = useState("items");
 
   useEffect(() => {
-    setActiveTab(phase === "draft" ? "draft" : "items");
+    if (phase === "match") {
+      setActiveTab("items");
+    }
   }, [phase]);
 
   const inDraft = phase === "draft";
@@ -217,28 +221,36 @@ export default function IntelBoard({
         </div>
       </div>
 
-      <section className="intel-role-section">
-        <div className="intel-section-header">
-          <h3>Select Your Role</h3>
-          <span>{ROLE_LOOKUP[role]}</span>
-        </div>
-
-        <div className={`intel-role-grid ${compact ? "intel-role-grid--compact" : ""}`}>
-          {ROLES.map((entry) => (
-            <RolePill
-              key={entry.value}
-              role={entry}
-              selected={entry.value === role}
-              onSelect={onRoleChange}
-              compact={compact}
-            />
-          ))}
-        </div>
-      </section>
-
       {inDraft ? (
-        <div className={`intel-grid ${compact ? "intel-grid--stacked" : ""}`}>
-          <section className="intel-panel">
+        <section className="intel-panel intel-draft-panel">
+          <div className="intel-draft-role-block">
+            <div className="intel-section-header">
+              <h3>Select Your Role</h3>
+              <span>{ROLE_LOOKUP[role]}</span>
+            </div>
+
+            <div className="intel-role-orb-rows">
+              {roleRows.map((entries, rowIndex) => (
+                <div
+                  key={`role-row-${rowIndex + 1}`}
+                  className={`intel-role-orb-row ${
+                    rowIndex === 1 ? "intel-role-orb-row--short" : ""
+                  }`}
+                >
+                  {entries.map((entry) => (
+                    <RoleOrb
+                      key={entry.value}
+                      role={entry}
+                      selected={entry.value === role}
+                      onSelect={onRoleChange}
+                    />
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="intel-draft-picks">
             <div className="intel-section-header">
               <h3>{enemyLabel} Picks</h3>
               <span>{enemyHeroes.length}</span>
@@ -261,11 +273,11 @@ export default function IntelBoard({
                 description="As soon as the feed sees draft heroes, they will appear here."
               />
             )}
-          </section>
+          </div>
 
-          <section className="intel-panel">
+          <div className="intel-draft-suggestions">
             <div className="intel-section-header">
-              <h3>Recommended Heroes</h3>
+              <h3>Hero Suggestions</h3>
               <span>{counterPickLoading ? "scanning..." : counterPickResults.length}</span>
             </div>
 
@@ -286,109 +298,103 @@ export default function IntelBoard({
               </div>
             ) : (
               <EmptyCard
-                title="No picks to score yet"
-                description="Choose your role and wait for at least one enemy pick to arrive."
+                title="No hero suggestions yet"
+                description="Choose your role and wait for enemy picks to arrive."
               />
             )}
-          </section>
-        </div>
+          </div>
+        </section>
       ) : null}
 
       {inMatch ? (
         <>
-          {compact ? (
-            <div className="intel-tabs">
-              <button
-                type="button"
-                className={activeTab === "items" ? "intel-tab intel-tab--active" : "intel-tab"}
-                onClick={() => setActiveTab("items")}
-              >
-                {audienceMode === "spectator" ? "Hero Items" : "Item Suggestions"}
-              </button>
-              <button
-                type="button"
-                className={activeTab === "hp" ? "intel-tab intel-tab--active" : "intel-tab"}
-                onClick={() => setActiveTab("hp")}
-              >
-                {enemyLabel} HP
-              </button>
-            </div>
-          ) : null}
+          <div className="intel-tabs">
+            <button
+              type="button"
+              className={activeTab === "items" ? "intel-tab intel-tab--active" : "intel-tab"}
+              onClick={() => setActiveTab("items")}
+            >
+              {audienceMode === "spectator" ? "Hero Items" : "Item Suggestions"}
+            </button>
+            <button
+              type="button"
+              className={activeTab === "hp" ? "intel-tab intel-tab--active" : "intel-tab"}
+              onClick={() => setActiveTab("hp")}
+            >
+              {enemyLabel} HP
+            </button>
+          </div>
 
-          <div className={`intel-grid ${compact ? "intel-grid--stacked" : ""}`}>
-            {(!compact || activeTab === "items") && (
-              <section className="intel-panel">
-                <div className="intel-section-header">
-                  <h3>{audienceMode === "spectator" ? "Observed Hero Items" : "Item Suggestions"}</h3>
-                  <span>{itemLoading ? "updating..." : itemResults.length}</span>
-                </div>
+          {activeTab === "items" ? (
+            <section className="intel-panel">
+              <div className="intel-section-header">
+                <h3>{audienceMode === "spectator" ? "Observed Hero Items" : "Item Suggestions"}</h3>
+                <span>
+                  {audienceMode === "spectator"
+                    ? enemyInventories.length
+                    : itemLoading
+                      ? "updating..."
+                      : itemResults.length}
+                </span>
+              </div>
 
-                <div className="enemy-loadout-stack">
-                  {enemyInventories.length ? (
-                    enemyInventories.map((inventory) => (
+              {audienceMode === "spectator" ? (
+                enemyInventories.length ? (
+                  <div className="enemy-loadout-stack">
+                    {enemyInventories.map((inventory) => (
                       <EnemyInventory
                         key={`${inventory.heroId || inventory.heroName}-inventory`}
                         inventory={inventory}
                       />
-                    ))
-                  ) : (
-                    <EmptyCard
-                      title={`${enemyLabel} inventories unavailable`}
-                      description="If your GSI payload includes hero items, they will be grouped here automatically."
-                    />
-                  )}
-                </div>
-
-                <div className="intel-suggestion-list">
-                  {itemLoading ? (
-                    <EmptyCard
-                      title="Evaluating item timing"
-                      description="Running your item-response RPC against the current enemy inventory."
-                    />
-                  ) : itemResults.length ? (
-                    itemResults.map((item) => (
-                      <ItemSuggestionCard key={`${item.itemId}-${item.itemName}`} item={item} />
-                    ))
-                  ) : (
-                    <EmptyCard
-                      title={
-                        audienceMode === "spectator"
-                          ? "Observed items are live"
-                          : "No item suggestions yet"
-                      }
-                      description={
-                        audienceMode === "spectator"
-                          ? "Hero inventories still update in spectator mode even when there is no single local hero to optimize around."
-                          : "The panel needs your hero and enemy context before it can score purchases."
-                      }
-                    />
-                  )}
-                </div>
-              </section>
-            )}
-
-            {(!compact || activeTab === "hp") && (
-              <section className="intel-panel">
-                <div className="intel-section-header">
-                  <h3>{enemyLabel} HP</h3>
-                  <span>{enemyHealth.length}</span>
-                </div>
-
-                {enemyHealth.length ? (
-                  <div className="enemy-health-list">
-                    {enemyHealth.map((hero) => (
-                      <HealthRow key={`${hero.id}-${hero.name}`} hero={hero} />
                     ))}
                   </div>
                 ) : (
                   <EmptyCard
-                    title={`${enemyLabel} health feed inactive`}
-                    description="If your GSI payload includes visible hero health, this panel will update live."
+                    title={`${enemyLabel} inventories unavailable`}
+                    description="If your GSI payload includes hero items, they will be grouped here automatically."
                   />
-                )}
-              </section>
-            )}
-          </div>
+                )
+              ) : itemLoading ? (
+                <EmptyCard
+                  title="Evaluating item timing"
+                  description="Running your item-response RPC against the current enemy inventory."
+                />
+              ) : itemResults.length ? (
+                <div className="intel-suggestion-list">
+                  {itemResults.map((item) => (
+                    <ItemSuggestionCard key={`${item.itemId}-${item.itemName}`} item={item} />
+                  ))}
+                </div>
+              ) : (
+                <EmptyCard
+                  title="No item suggestions yet"
+                  description="The panel needs your hero and enemy context before it can score purchases."
+                />
+              )}
+            </section>
+          ) : null}
+
+          {activeTab === "hp" ? (
+            <section className="intel-panel">
+              <div className="intel-section-header">
+                <h3>{enemyLabel} HP</h3>
+                <span>{enemyHealth.length}</span>
+              </div>
+
+              {enemyHealth.length ? (
+                <div className="enemy-health-list">
+                  {enemyHealth.map((hero) => (
+                    <HealthRow key={`${hero.id}-${hero.name}`} hero={hero} />
+                  ))}
+                </div>
+              ) : (
+                <EmptyCard
+                  title={`${enemyLabel} health feed inactive`}
+                  description="If your GSI payload includes visible hero health, this panel will update live."
+                />
+              )}
+            </section>
+          ) : null}
         </>
       ) : null}
 

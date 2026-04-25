@@ -395,6 +395,14 @@
   padding: 20px;
 }
 
+.intel-draft-panel,
+.intel-draft-role-block,
+.intel-draft-picks,
+.intel-draft-suggestions {
+  display: grid;
+  gap: 16px;
+}
+
 .intel-section-header {
   align-items: baseline;
   margin-bottom: 16px;
@@ -417,6 +425,50 @@
 
 .intel-role-grid--compact {
   grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.intel-role-orb-rows {
+  display: grid;
+  gap: 10px;
+}
+
+.intel-role-orb-row {
+  display: flex;
+  gap: 12px;
+}
+
+.intel-role-orb-row--short {
+  justify-content: center;
+}
+
+.intel-role-orb {
+  display: grid;
+  place-items: center;
+  width: 60px;
+  height: 60px;
+  padding: 0;
+  border: 1px solid rgba(211, 169, 92, 0.24);
+  border-radius: 999px;
+  color: #cfb998;
+  font-family: "Rajdhani", sans-serif;
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  background:
+    radial-gradient(circle at top, rgba(255, 198, 138, 0.08), transparent 62%),
+    rgba(255, 255, 255, 0.02);
+  box-shadow: inset 0 1px 0 rgba(255, 235, 205, 0.06);
+}
+
+.intel-role-orb--active {
+  color: #fff1d6;
+  border-color: rgba(255, 188, 113, 0.52);
+  background:
+    radial-gradient(circle at top, rgba(255, 214, 157, 0.18), transparent 58%),
+    linear-gradient(180deg, rgba(193, 70, 55, 0.34), rgba(255, 255, 255, 0.02));
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 224, 175, 0.12),
+    0 8px 24px rgba(117, 34, 26, 0.22);
 }
 
 .intel-role-pill {
@@ -474,6 +526,10 @@
 .enemy-health-list {
   display: grid;
   gap: 12px;
+}
+
+.enemy-draft-list {
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
 }
 
 .draft-chip,
@@ -966,5 +1022,9 @@
 
   .landing-hero h1 {
     font-size: 2.8rem;
+  }
+
+  .enemy-draft-list {
+    grid-template-columns: 1fr;
   }
 }
