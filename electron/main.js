@@ -43,6 +43,8 @@ function registerIpcHandlers() {
     host: "127.0.0.1",
     port: GSI_PORT,
     endpoint: `http://127.0.0.1:${GSI_PORT}/gsi`,
+    lastReceivedAt: null,
+    packetCount: 0,
   });
 
   ipcMain.handle("window:toggle-overlay", async () => {

@@ -133,6 +133,7 @@ export default function IntelBoard({
   variant = "full",
 }) {
   const compact = variant === "compact";
+  const hasPackets = Boolean(serverStatus?.packetCount);
   const {
     phase,
     audienceMode,
@@ -189,7 +190,9 @@ export default function IntelBoard({
                 ? `Role-based counter suggestions are tied to your saved role: ${ROLE_LOOKUP[role]}.`
                 : hasAnyLiveContext
                   ? "The app sees live match context. As more hero, item, and health data arrives it will populate automatically."
-                  : "Start the overlay, launch Dota 2, and point Game State Integration at localhost:3001."}
+                  : hasPackets
+                    ? "Dota packets are arriving, but the current payload does not yet contain enough match context."
+                    : "No Dota packets received yet. Add -gamestateintegration to Dota 2 launch options and point Game State Integration at localhost:3001."}
           </p>
         </div>
 
@@ -201,6 +204,13 @@ export default function IntelBoard({
           >
             {serverStatus?.running ? "GSI Listening" : "GSI Offline"}
           </span>
+          {serverStatus?.running ? (
+            <small className="intel-board__diagnostic">
+              {hasPackets
+                ? `Packets: ${serverStatus.packetCount}`
+                : "Waiting for first packet"}
+            </small>
+          ) : null}
           {inMatch && audienceMode !== "spectator" ? (
             <strong>{currentItems.length} current items</strong>
           ) : null}

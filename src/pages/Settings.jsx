@@ -15,6 +15,7 @@ const gsiConfigSnippet = `"DotaHelper"
   {
     "provider"    "1"
     "map"         "1"
+    "draft"       "1"
     "hero"        "1"
     "player"      "1"
     "items"       "1"
@@ -172,10 +173,23 @@ export default function Settings() {
               <span>{hasCredentials ? "Supabase ready" : "Missing anon key"}</span>
             </div>
 
+            <div className="settings-callout">
+              <strong>Dota launch option required</strong>
+              <p>Add `-gamestateintegration` to Dota 2 launch options in Steam, then restart Dota.</p>
+            </div>
+
             <div className="settings-runtime-list">
               <div className="settings-runtime-row">
                 <span>Endpoint</span>
                 <strong>{endpointLabel}</strong>
+              </div>
+              <div className="settings-runtime-row">
+                <span>Last packet</span>
+                <strong>{gsi?.serverStatus?.lastReceivedAt || "None received yet"}</strong>
+              </div>
+              <div className="settings-runtime-row">
+                <span>Packets seen</span>
+                <strong>{gsi?.serverStatus?.packetCount || 0}</strong>
               </div>
               <div className="settings-runtime-row">
                 <span>Overlay state</span>

@@ -20,6 +20,18 @@ function normalizeCollection(collection = {}) {
     .filter(Boolean);
 }
 
+function toEntityArray(value) {
+  if (Array.isArray(value)) {
+    return value.filter((entry) => entry && typeof entry === "object");
+  }
+
+  if (value && typeof value === "object") {
+    return [value];
+  }
+
+  return [];
+}
+
 function toNumber(value) {
   const numericValue = Number(value);
   return Number.isFinite(numericValue) ? numericValue : null;
@@ -49,15 +61,25 @@ function normalizeInventory(collection = {}) {
 }
 
 function normalizeState(payload) {
-  const hero = normalizeNamedEntity(payload.hero, payload.hero?.name || "Unknown Hero");
-  const items = normalizeInventory(payload.items);
+  const isObserverPayload = Array.isArray(payload.hero) || Array.isArray(payload.player);
+  const hero = isObserverPayload
+    ? null
+    : normalizeNamedEntity(payload.hero, payload.hero?.name || "Unknown Hero");
+  const items = Array.isArray(payload.items) ? [] : normalizeInventory(payload.items);
   const abilities = normalizeCollection(payload.abilities).map((ability) => ({
     name: ability.name,
     level: ability.level,
     cooldown: ability.cooldown,
     raw: ability,
   }));
-  const heroes = normalizeCollection(payload.heroes).map((entry) => ({
+  const observerItemGroups = Array.isArray(payload.items) ? payload.items : [];
+  const heroEntries = toEntityArray(payload.heroes).length
+    ? toEntityArray(payload.heroes)
+    : toEntityArray(payload.hero);
+  const playerEntries = toEntityArray(payload.players).length
+    ? toEntityArray(payload.players)
+    : toEntityArray(payload.player);
+  const heroes = heroEntries.map((entry, index) => ({
     id: entry.id || entry.hero_id || null,
     name: entry.localized_name || entry.name || "Unknown Hero",
     team: entry.team_name || entry.team || null,
@@ -77,10 +99,14 @@ function normalizeState(payload) {
         return Math.round((health / maxHealth) * 100);
       })(),
     imageUrl: entry.image || entry.image_url || null,
-    items: normalizeInventory(entry.items),
+    items: normalizeInventory(
+      entry.items ||
+        observerItemGroups[index]?.items ||
+        observerItemGroups[index]
+    ),
     raw: entry,
   }));
-  const players = normalizeCollection(payload.players).map((entry) => ({
+  const players = playerEntries.map((entry, index) => ({
     steamId: entry.steamid || entry.steam_id || null,
     heroId: entry.hero_id || null,
     team: entry.team_name || entry.team || null,
@@ -100,11 +126,16 @@ function normalizeState(payload) {
         return Math.round((health / maxHealth) * 100);
       })(),
     imageUrl: entry.image || entry.image_url || null,
-    items: normalizeInventory(entry.items),
+    items: normalizeInventory(
+      entry.items ||
+        observerItemGroups[index]?.items ||
+        observerItemGroups[index]
+    ),
     raw: entry,
   }));
-  const localTeam =
-    payload.player?.team_name || payload.player?.team || payload.hero?.team_name || payload.hero?.team;
+  const localTeam = Array.isArray(payload.player)
+    ? null
+    : payload.player?.team_name || payload.player?.team || payload.hero?.team_name || payload.hero?.team;
   const enemyMatcher = !localTeam
     ? /dire|enemy/i
     : /radiant/i.test(localTeam)
@@ -121,8 +152,9 @@ function normalizeState(payload) {
     raw: payload,
     receivedAt: new Date().toISOString(),
     provider: payload.provider || null,
+    draft: payload.draft || null,
     map: payload.map || null,
-    player: payload.player || null,
+    player: Array.isArray(payload.player) ? null : payload.player || null,
     hero,
     items,
     abilities,
@@ -140,6 +172,7 @@ function createGsiServer({ port = 3001, host = "127.0.0.1" } = {}) {
   const emitter = new EventEmitter();
   let server = null;
   let latestState = null;
+  let packetCount = 0;
 
   app.use(express.json({ limit: "2mb", type: "*/*" }));
 
@@ -148,11 +181,14 @@ function createGsiServer({ port = 3001, host = "127.0.0.1" } = {}) {
       ok: true,
       running: Boolean(server),
       port,
+      packetCount,
+      lastReceivedAt: latestState?.receivedAt || null,
     });
   });
 
   app.post(["/", "/gsi"], (request, response) => {
     latestState = normalizeState(request.body || {});
+    packetCount += 1;
     emitter.emit("state", latestState);
 
     response.json({
@@ -227,6 +263,8 @@ function createGsiServer({ port = 3001, host = "127.0.0.1" } = {}) {
       host,
       port,
       endpoint: `http://${host}:${port}/gsi`,
+      lastReceivedAt: latestState?.receivedAt || null,
+      packetCount,
     };
   }
 

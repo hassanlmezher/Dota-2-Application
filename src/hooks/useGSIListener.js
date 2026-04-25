@@ -5,6 +5,8 @@ const fallbackStatus = {
   host: "127.0.0.1",
   port: Number(import.meta.env.VITE_GSI_PORT || 3001),
   endpoint: `http://127.0.0.1:${Number(import.meta.env.VITE_GSI_PORT || 3001)}/gsi`,
+  lastReceivedAt: null,
+  packetCount: 0,
 };
 
 const fallbackOverlayState = {
