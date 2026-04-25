@@ -1,159 +1,156 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import HeroCard from "../components/HeroCard";
-import Loader from "../components/Loader";
-import RoleSelector from "../components/RoleSelector";
-import SearchBar from "../components/SearchBar";
 import { useCounterPicks } from "../hooks/useCounterPicks";
-import { ROLE_LOOKUP } from "../constants/roles";
-import { supabase } from "../api/supabaseClient";
+import { resolveHeroNames } from "../api/supabaseClient";
 
-function saveRecentSearch(entry) {
-  const storageKey = "dota-helper:recent-counter-searches";
-  const current = JSON.parse(window.localStorage.getItem(storageKey) || "[]");
-  const next = [entry, ...current].slice(0, 10);
-  window.localStorage.setItem(storageKey, JSON.stringify(next));
+function EmptyCard({ title, description }) {
+  return (
+    <div className="intel-empty">
+      <h4>{title}</h4>
+      <p>{description}</p>
+    </div>
+  );
 }
 
-export default function PickAssistant() {
-  const [selectedRole, setSelectedRole] = useState("carry");
-  const [enemyHeroIds, setEnemyHeroIds] = useState([]);
-  const [heroes, setHeroes] = useState([]);
-  const [directoryError, setDirectoryError] = useState("");
-  const [loadingDirectory, setLoadingDirectory] = useState(true);
+export default function PickAssistant({
+  role,
+  enemyHeroNames = [],
+  limit = 8,
+  compact = false,
+  active = true,
+}) {
   const { results, loading, error, runCounterPickSearch } = useCounterPicks();
+  const [resolvedHeroes, setResolvedHeroes] = useState([]);
+  const [resolutionError, setResolutionError] = useState("");
+  const [resolving, setResolving] = useState(false);
+  const normalizedEnemyNames = useMemo(
+    () => [...new Set(enemyHeroNames.filter(Boolean))],
+    [enemyHeroNames]
+  );
+  const enemyKey = normalizedEnemyNames.join("|");
+  const resolvedHeroIds = resolvedHeroes.map((hero) => hero.heroId).filter(Boolean);
 
   useEffect(() => {
     let isMounted = true;
 
-    async function loadHeroes() {
-      setLoadingDirectory(true);
-      setDirectoryError("");
-
-      if (!supabase) {
-        setDirectoryError("Supabase client is not configured.");
-        setLoadingDirectory(false);
+    async function resolveEnemyHeroes() {
+      if (!active || !normalizedEnemyNames.length) {
+        setResolvedHeroes([]);
+        setResolutionError("");
+        setResolving(false);
         return;
       }
 
-      const { data, error: fetchError } = await supabase
-        .from("heroes")
-        .select("hero_id, hero_name, image_url, primary_attribute")
-        .order("hero_name", { ascending: true });
+      try {
+        setResolving(true);
+        setResolutionError("");
+        const nextHeroes = await resolveHeroNames(normalizedEnemyNames);
 
-      if (!isMounted) {
-        return;
+        if (!isMounted) {
+          return;
+        }
+
+        setResolvedHeroes(nextHeroes);
+
+        if (!nextHeroes.length) {
+          setResolutionError(
+            "Enemy heroes were detected from GSI, but none matched the Supabase hero catalog."
+          );
+        }
+      } catch (requestError) {
+        if (isMounted) {
+          setResolvedHeroes([]);
+          setResolutionError(requestError?.message || "Failed to resolve enemy heroes.");
+        }
+      } finally {
+        if (isMounted) {
+          setResolving(false);
+        }
       }
-
-      if (fetchError) {
-        setDirectoryError(fetchError.message);
-        setLoadingDirectory(false);
-        return;
-      }
-
-      setHeroes(
-        (data || []).map((hero) => ({
-          value: hero.hero_id,
-          label: hero.hero_name,
-          imageUrl: hero.image_url,
-          meta: hero.primary_attribute,
-        }))
-      );
-      setLoadingDirectory(false);
     }
 
-    loadHeroes();
+    resolveEnemyHeroes();
 
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [active, enemyKey]);
 
-  async function handleSubmit(event) {
-    event.preventDefault();
-
-    const nextResults = await runCounterPickSearch({
-      role: selectedRole,
-      enemyHeroIds,
-    });
-
-    if (nextResults.length) {
-      const enemyHeroes = heroes
-        .filter((hero) => enemyHeroIds.includes(hero.value))
-        .map((hero) => hero.label);
-
-      saveRecentSearch({
-        id: crypto.randomUUID(),
-        role: selectedRole,
-        roleLabel: ROLE_LOOKUP[selectedRole],
-        enemyHeroes,
-        createdAt: new Date().toISOString(),
-      });
+  useEffect(() => {
+    if (!active || !role || !resolvedHeroIds.length) {
+      return;
     }
+
+    runCounterPickSearch({
+      role,
+      enemyHeroIds: resolvedHeroIds,
+      limit,
+    });
+  }, [active, limit, role, resolvedHeroIds.join(",")]);
+
+  if (!active) {
+    return null;
+  }
+
+  if (!normalizedEnemyNames.length) {
+    return (
+      <EmptyCard
+        title="No enemy heroes detected yet"
+        description="As soon as the draft feed exposes enemy heroes, counter picks will appear here automatically."
+      />
+    );
+  }
+
+  if (resolving) {
+    return (
+      <EmptyCard
+        title="Resolving enemy heroes"
+        description="Matching live GSI hero names against the Supabase hero table."
+      />
+    );
+  }
+
+  if (resolutionError) {
+    return (
+      <EmptyCard
+        title="Hero resolution failed"
+        description={resolutionError}
+      />
+    );
+  }
+
+  if (loading) {
+    return (
+      <EmptyCard
+        title="Scoring counter picks"
+        description="Calling get_best_counter_picks with the detected enemy draft."
+      />
+    );
+  }
+
+  if (error) {
+    return (
+      <EmptyCard
+        title="Counter-pick RPC failed"
+        description={error}
+      />
+    );
+  }
+
+  if (!results.length) {
+    return (
+      <EmptyCard
+        title="No hero suggestions yet"
+        description="Enemy heroes are known, but the counter-pick function has not returned recommendations for this role."
+      />
+    );
   }
 
   return (
-    <section className="page">
-      <div className="page-header">
-        <div>
-          <p className="eyebrow">Pick Assistant</p>
-          <h1>Counter the enemy draft by role</h1>
-          <p className="page-lead">
-            Choose the lane you plan to play, add enemy heroes, and query your
-            Supabase matchup function.
-          </p>
-        </div>
-      </div>
-
-      <div className="page-grid page-grid--two-column">
-        <form className="panel form-panel" onSubmit={handleSubmit}>
-          <RoleSelector value={selectedRole} onChange={setSelectedRole} />
-
-          {loadingDirectory ? (
-            <Loader label="Loading hero directory..." />
-          ) : (
-            <SearchBar
-              label="Enemy Heroes"
-              placeholder="Search enemy heroes..."
-              options={heroes}
-              value={enemyHeroIds}
-              onChange={setEnemyHeroIds}
-              multi
-            />
-          )}
-
-          {directoryError ? <p className="error-text">{directoryError}</p> : null}
-
-          <button
-            type="submit"
-            className="button button-primary button-full"
-            disabled={loading || loadingDirectory || !enemyHeroIds.length}
-          >
-            {loading ? "Finding counters..." : "Get Best Counter Picks"}
-          </button>
-        </form>
-
-        <div className="panel result-panel">
-          <div className="section-heading">
-            <h2>Suggested Counter Picks</h2>
-            <span>{results.length} heroes</span>
-          </div>
-
-          {loading ? <Loader label="Scoring heroes..." /> : null}
-          {error ? <p className="error-text">{error}</p> : null}
-
-          {!loading && !results.length && !error ? (
-            <p className="empty-state">
-              Add at least one enemy hero and run the search to populate this panel.
-            </p>
-          ) : null}
-
-          <div className="result-stack">
-            {results.map((hero) => (
-              <HeroCard key={`${hero.heroId}-${hero.heroName}`} hero={hero} />
-            ))}
-          </div>
-        </div>
-      </div>
-    </section>
+    <div className="intel-suggestion-list">
+      {results.map((hero) => (
+        <HeroCard key={`${hero.heroId}-${hero.heroName}`} hero={hero} compact={compact} />
+      ))}
+    </div>
   );
 }

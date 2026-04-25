@@ -11,6 +11,9 @@ function subscribe(channel, callback) {
 
 contextBridge.exposeInMainWorld("electronAPI", {
   isElectron: true,
+  onGSIUpdate: (callback) => subscribe("gsi:state", callback),
+  getLastGSI: () => ipcRenderer.invoke("gsi:get-latest-state"),
+  toggleOverlay: () => ipcRenderer.invoke("window:toggle-overlay"),
   app: {
     getInfo: () => ipcRenderer.invoke("app:get-info"),
   },

@@ -1,5 +1,5 @@
-import { requireSupabase } from "./supabaseClient";
 import { formatItemName } from "../utils/formatItemName";
+import { getItemCatalog, requireSupabase } from "./supabaseClient";
 
 function isRpcSignatureError(error) {
   const message = `${error?.message || ""} ${error?.details || ""}`.toLowerCase();
@@ -10,26 +10,35 @@ function isRpcSignatureError(error) {
   );
 }
 
-async function callItemRpc(params) {
+function toScore(value) {
+  const numericValue = Number(
+    value?.total_score ??
+      value?.score ??
+      value?.final_score ??
+      value?.response_score ??
+      0
+  );
+
+  return Number.isFinite(numericValue) ? numericValue : 0;
+}
+
+async function callItemRpc({ heroId, enemyHeroIds, enemyItemIds }) {
   const supabase = requireSupabase();
   const attempts = [
     {
-      p_hero_id: params.heroId,
-      p_enemy_hero_ids: params.enemyHeroIds,
-      p_enemy_item_ids: params.enemyItemIds,
-      p_limit: params.limit,
+      my_hero_id: heroId,
+      enemy_hero_ids: enemyHeroIds,
+      enemy_item_ids: enemyItemIds,
     },
     {
-      hero_id: params.heroId,
-      enemy_hero_ids: params.enemyHeroIds,
-      enemy_item_ids: params.enemyItemIds,
-      limit: params.limit,
+      p_hero_id: heroId,
+      p_enemy_hero_ids: enemyHeroIds,
+      p_enemy_item_ids: enemyItemIds,
     },
     {
-      selected_hero_id: params.heroId,
-      selected_enemy_heroes: params.enemyHeroIds,
-      selected_enemy_items: params.enemyItemIds,
-      max_results: params.limit,
+      hero_id: heroId,
+      enemy_hero_ids: enemyHeroIds,
+      enemy_item_ids: enemyItemIds,
     },
   ];
 
@@ -52,46 +61,57 @@ async function callItemRpc(params) {
   throw lastError;
 }
 
-function mapItemSuggestion(result) {
-  const score =
-    result.score ??
-    result.final_score ??
-    result.total_score ??
-    result.response_score ??
-    0;
-
-  return {
-    itemId: result.item_id ?? result.id ?? null,
-    itemName: formatItemName(result.item_name || result.name || "Unknown Item"),
-    imageUrl: result.image_url || result.item_image_url || result.icon_url || null,
-    category: result.category || result.item_category || "utility",
-    score,
-    reason:
-      result.reason ||
-      result.summary ||
-      "Recommended against the selected enemy heroes and active threat items.",
-    raw: result,
-  };
-}
-
 async function getItemSuggestions({
   heroId,
   enemyHeroIds = [],
   enemyItemIds = [],
   limit = 8,
 }) {
-  if (!heroId) {
+  const normalizedHeroId = Number(heroId);
+  const normalizedEnemyHeroIds = enemyHeroIds
+    .map((value) => Number(value))
+    .filter((value) => Number.isInteger(value));
+  const normalizedEnemyItemIds = enemyItemIds
+    .map((value) => Number(value))
+    .filter((value) => Number.isInteger(value));
+
+  if (!Number.isInteger(normalizedHeroId)) {
     return [];
   }
 
-  const results = await callItemRpc({
-    heroId,
-    enemyHeroIds,
-    enemyItemIds,
-    limit,
-  });
+  const [results, itemCatalog] = await Promise.all([
+    callItemRpc({
+      heroId: normalizedHeroId,
+      enemyHeroIds: normalizedEnemyHeroIds,
+      enemyItemIds: normalizedEnemyItemIds,
+    }),
+    getItemCatalog(),
+  ]);
+  const itemsById = new Map(itemCatalog.map((item) => [String(item.itemId), item]));
+  const itemsByName = new Map(itemCatalog.map((item) => [item.itemName, item]));
 
-  return results.map(mapItemSuggestion);
+  return results.slice(0, limit).map((result) => {
+    const itemId = result.item_id ?? result.id ?? null;
+    const itemName = formatItemName(result.item_name || result.name || "Unknown Item");
+    const meta =
+      (itemId !== null ? itemsById.get(String(itemId)) : null) ||
+      itemsByName.get(itemName) ||
+      null;
+
+    return {
+      itemId: meta?.itemId ?? itemId,
+      itemName: meta?.itemName || itemName,
+      imageUrl: meta?.imageUrl || result.image_url || result.item_image_url || null,
+      category: meta?.category || result.category || result.item_category || "utility",
+      cost: meta?.cost ?? result.cost ?? null,
+      score: toScore(result),
+      reason:
+        result.reason ||
+        result.summary ||
+        "Recommended from the current enemy hero lineup and detected threat items.",
+      raw: result,
+    };
+  });
 }
 
 export const itemsApi = {

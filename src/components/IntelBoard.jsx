@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
-import { ROLES, ROLE_LOOKUP } from "../constants/roles";
-import { useOverlayInsights } from "../hooks/useOverlayInsights";
+import { useEffect, useMemo, useState } from "react";
+import { ROLE_LOOKUP } from "../constants/roles";
+import PickAssistant from "../pages/PickAssistant";
+import ItemAssistant from "../pages/ItemAssistant";
+import RoleSelector from "./RoleSelector";
 
 function Avatar({ imageUrl, label }) {
   if (imageUrl) {
@@ -8,113 +10,6 @@ function Avatar({ imageUrl, label }) {
   }
 
   return <span className="intel-avatar__fallback">{label.slice(0, 2).toUpperCase()}</span>;
-}
-
-function RoleOrb({ role, selected, onSelect }) {
-  const positionLabel = role.shortLabel.replace(/^Pos\s*/i, "");
-
-  return (
-    <button
-      type="button"
-      className={selected ? "intel-role-orb intel-role-orb--active" : "intel-role-orb"}
-      aria-label={`${role.label} (${role.shortLabel})`}
-      title={`${role.label} (${role.shortLabel})`}
-      onClick={() => onSelect(role.value)}
-    >
-      <span>{positionLabel}</span>
-    </button>
-  );
-}
-
-function SuggestionCard({ hero, compact }) {
-  return (
-    <article className={`intel-suggestion ${compact ? "intel-suggestion--compact" : ""}`}>
-      <div className="intel-suggestion__hero">
-        <div className="intel-avatar">
-          <Avatar imageUrl={hero.imageUrl} label={hero.heroName} />
-        </div>
-        <div>
-          <h4>{hero.heroName}</h4>
-          <p>{hero.reason}</p>
-        </div>
-      </div>
-      <div className="intel-suggestion__score">
-        <span>Advantage</span>
-        <strong>{Math.round(hero.score)}%</strong>
-      </div>
-    </article>
-  );
-}
-
-function ItemSuggestionCard({ item }) {
-  return (
-    <article className="intel-item-card">
-      <div className="intel-item-card__media">
-        <Avatar imageUrl={item.imageUrl} label={item.itemName} />
-      </div>
-      <div className="intel-item-card__body">
-        <div className="intel-item-card__top">
-          <div>
-            <h4>{item.itemName}</h4>
-            <p>{item.category}</p>
-          </div>
-          <strong>{Math.round(item.score)}%</strong>
-        </div>
-        <p className="intel-item-card__reason">{item.reason}</p>
-      </div>
-    </article>
-  );
-}
-
-function EnemyInventory({ inventory }) {
-  return (
-    <article className="enemy-loadout">
-      <div className="enemy-loadout__header">
-        <div className="intel-avatar intel-avatar--small">
-          <Avatar imageUrl={inventory.imageUrl} label={inventory.heroName} />
-        </div>
-        <div>
-          <h4>{inventory.heroName}</h4>
-          <p>{inventory.items.length} items seen</p>
-        </div>
-      </div>
-
-      <div className="enemy-loadout__items">
-        {inventory.items.map((item) => (
-          <div className="enemy-item-chip" key={`${inventory.heroName}-${item.slot}-${item.name}`}>
-            <span>{item.name}</span>
-            <small>{item.slot}</small>
-          </div>
-        ))}
-      </div>
-    </article>
-  );
-}
-
-function HealthRow({ hero }) {
-  return (
-    <article className="enemy-health-row">
-      <div className="enemy-health-row__meta">
-        <div className="intel-avatar intel-avatar--small">
-          <Avatar imageUrl={hero.imageUrl} label={hero.name} />
-        </div>
-        <div>
-          <h4>{hero.name}</h4>
-          <p>
-            {hero.health !== null && hero.maxHealth !== null
-              ? `${hero.health}/${hero.maxHealth} HP`
-              : "Health feed active"}
-          </p>
-        </div>
-      </div>
-
-      <div className="enemy-health-row__bar">
-        <span style={{ width: `${hero.healthPercent || 0}%` }} />
-      </div>
-
-      <strong>{hero.healthPercent ?? "--"}%</strong>
-    </article>
-  );
 }
 
 function EmptyCard({ title, description }) {
@@ -126,6 +21,37 @@ function EmptyCard({ title, description }) {
   );
 }
 
+function HealthRow({ hero }) {
+  const healthPercent =
+    hero.healthPercent !== null && hero.healthPercent !== undefined
+      ? hero.healthPercent
+      : 100;
+
+  return (
+    <article className="enemy-health-row">
+      <div className="enemy-health-row__meta">
+        <div className="intel-avatar intel-avatar--small">
+          <Avatar imageUrl={hero.imageUrl} label={hero.heroName} />
+        </div>
+        <div>
+          <h4>{hero.heroName}</h4>
+          <p>
+            {hero.currentHealth !== null && hero.maxHealth !== null
+              ? `${hero.currentHealth}/${hero.maxHealth} HP`
+              : "Hidden from vision, assumed full HP"}
+          </p>
+        </div>
+      </div>
+
+      <div className="enemy-health-row__bar">
+        <span style={{ width: `${healthPercent}%` }} />
+      </div>
+
+      <strong>{healthPercent}%</strong>
+    </article>
+  );
+}
+
 export default function IntelBoard({
   matchState,
   serverStatus,
@@ -134,32 +60,24 @@ export default function IntelBoard({
   variant = "full",
 }) {
   const compact = variant === "compact";
-  const roleRows = [ROLES.slice(0, 3), ROLES.slice(3)];
+  const phase = matchState?.phase || "idle";
+  const audienceMode = matchState?.audienceMode || "player";
+  const heroName = matchState?.myHeroName || "";
+  const enemyHeroes = matchState?.enemyHeroes || [];
+  const enemyHeroNames = matchState?.enemyHeroNames || [];
+  const enemyHealth = useMemo(
+    () =>
+      (matchState?.enemyHealthList || []).map((hero) => ({
+        ...hero,
+        healthPercent:
+          hero.healthPercent !== null && hero.healthPercent !== undefined
+            ? hero.healthPercent
+            : 100,
+      })),
+    [matchState?.enemyHealthList]
+  );
   const hasPackets = Boolean(serverStatus?.packetCount);
-  const {
-    phase,
-    audienceMode,
-    phaseLabel,
-    mapStateLabel,
-    clockLabel,
-    heroName,
-    playerLevel,
-    currentItems,
-    enemyLabel,
-    enemyHeroes,
-    enemyInventories,
-    enemyHealth,
-    counterPickResults,
-    counterPickLoading,
-    itemResults,
-    itemLoading,
-    hasAnyLiveContext,
-  } = useOverlayInsights({
-    matchState,
-    role,
-    counterLimit: compact ? 6 : 8,
-    itemLimit: compact ? 4 : 6,
-  });
+  const hasAnyLiveContext = Boolean(matchState?.hasAnyLiveContext);
   const [activeTab, setActiveTab] = useState("items");
 
   useEffect(() => {
@@ -168,32 +86,37 @@ export default function IntelBoard({
     }
   }, [phase]);
 
-  const inDraft = phase === "draft";
-  const inMatch = phase === "match";
-
   return (
     <section className={`intel-board intel-board--${variant}`}>
       <div className="intel-board__hero">
         <div>
-          <p className="intel-kicker">{phaseLabel}</p>
+          <p className="intel-kicker">
+            {phase === "draft"
+              ? audienceMode === "spectator"
+                ? "Observed draft"
+                : "Draft phase"
+              : phase === "match"
+                ? audienceMode === "spectator"
+                  ? "Observed live match"
+                  : "Live match"
+                : "Awaiting Dota 2"}
+          </p>
           <h2>
-            {inMatch
-              ? heroName
-              : inDraft
-                ? `${enemyLabel} draft detected`
+            {phase === "draft"
+              ? "Enemy draft detected"
+              : phase === "match"
+                ? heroName || "Live match detected"
                 : hasAnyLiveContext
                   ? "Live feed connected"
                   : "Waiting for live data"}
           </h2>
           <p>
-            {inMatch
-              ? audienceMode === "spectator"
-                ? `Clock ${clockLabel} • ${mapStateLabel} • Spectator or observed match feed`
-                : `Clock ${clockLabel} • ${mapStateLabel}${playerLevel ? ` • Level ${playerLevel}` : ""}`
-              : inDraft
-                ? `Role-based counter suggestions are tied to your saved role: ${ROLE_LOOKUP[role]}.`
+            {phase === "draft"
+              ? `Role-based counter suggestions are tied to your selected role: ${ROLE_LOOKUP[role]}.`
+              : phase === "match"
+                ? `Clock ${matchState?.clockLabel || "--:--"} • ${matchState?.mapStateLabel || "No match detected"}`
                 : hasAnyLiveContext
-                  ? "The app sees live match context. As more hero, item, and health data arrives it will populate automatically."
+                  ? "The app sees live Dota context and will populate heroes, items, and health as packets arrive."
                   : hasPackets
                     ? "Dota packets are arriving, but the current payload does not yet contain enough match context."
                     : "No Dota packets received yet. Add -gamestateintegration to Dota 2 launch options and point Game State Integration at localhost:3001."}
@@ -208,105 +131,78 @@ export default function IntelBoard({
           >
             {serverStatus?.running ? "GSI Listening" : "GSI Offline"}
           </span>
-          {serverStatus?.running ? (
-            <small className="intel-board__diagnostic">
-              {hasPackets
-                ? `Packets: ${serverStatus.packetCount}`
-                : "Waiting for first packet"}
-            </small>
-          ) : null}
-          {inMatch && audienceMode !== "spectator" ? (
-            <strong>{currentItems.length} current items</strong>
+          <small className="intel-board__diagnostic">
+            {hasPackets ? `Packets: ${serverStatus.packetCount}` : "Waiting for first packet"}
+          </small>
+          {phase === "match" && heroName ? (
+            <strong>{matchState?.myItemNames?.length || 0} current items</strong>
           ) : null}
         </div>
       </div>
 
-      {inDraft ? (
+      {phase === "draft" ? (
         <section className="intel-panel intel-draft-panel">
           <div className="intel-draft-role-block">
             <div className="intel-section-header">
               <h3>Select Your Role</h3>
               <span>{ROLE_LOOKUP[role]}</span>
             </div>
-
-            <div className="intel-role-orb-rows">
-              {roleRows.map((entries, rowIndex) => (
-                <div
-                  key={`role-row-${rowIndex + 1}`}
-                  className={`intel-role-orb-row ${
-                    rowIndex === 1 ? "intel-role-orb-row--short" : ""
-                  }`}
-                >
-                  {entries.map((entry) => (
-                    <RoleOrb
-                      key={entry.value}
-                      role={entry}
-                      selected={entry.value === role}
-                      onSelect={onRoleChange}
-                    />
-                  ))}
-                </div>
-              ))}
-            </div>
+            <RoleSelector value={role} onChange={onRoleChange} />
           </div>
 
           <div className="intel-draft-picks">
             <div className="intel-section-header">
-              <h3>{enemyLabel} Picks</h3>
-              <span>{enemyHeroes.length}</span>
+              <h3>Enemy Picks</h3>
+              <span>{enemyHeroNames.length}</span>
             </div>
 
             {enemyHeroes.length ? (
               <div className="enemy-draft-list">
                 {enemyHeroes.map((hero) => (
-                  <div className="draft-chip" key={`${hero.id}-${hero.name}`}>
+                  <div className="draft-chip" key={hero.key || hero.heroName}>
                     <div className="intel-avatar intel-avatar--small">
-                      <Avatar imageUrl={hero.imageUrl} label={hero.name} />
+                      <Avatar imageUrl={hero.imageUrl} label={hero.heroName} />
                     </div>
-                    <span>{hero.name}</span>
+                    <span>{hero.heroName}</span>
+                  </div>
+                ))}
+              </div>
+            ) : enemyHeroNames.length ? (
+              <div className="enemy-draft-list">
+                {enemyHeroNames.map((heroNameValue) => (
+                  <div className="draft-chip" key={heroNameValue}>
+                    <div className="intel-avatar intel-avatar--small">
+                      <Avatar imageUrl={null} label={heroNameValue} />
+                    </div>
+                    <span>{heroNameValue}</span>
                   </div>
                 ))}
               </div>
             ) : (
               <EmptyCard
-                title={`No ${enemyLabel.toLowerCase()} picks yet`}
-                description="As soon as the feed sees draft heroes, they will appear here."
+                title="No enemy heroes detected yet"
+                description="As soon as the draft feed exposes enemy heroes, they will appear here."
               />
             )}
           </div>
 
           <div className="intel-draft-suggestions">
             <div className="intel-section-header">
-              <h3>Hero Suggestions</h3>
-              <span>{counterPickLoading ? "scanning..." : counterPickResults.length}</span>
+              <h3>Best Picks</h3>
+              <span>{ROLE_LOOKUP[role]}</span>
             </div>
-
-            {counterPickLoading ? (
-              <EmptyCard
-                title="Scoring matchup data"
-                description="Pulling counter recommendations from your Supabase RPC."
-              />
-            ) : counterPickResults.length ? (
-              <div className="intel-suggestion-list">
-                {counterPickResults.map((hero) => (
-                  <SuggestionCard
-                    key={`${hero.heroId}-${hero.heroName}`}
-                    hero={hero}
-                    compact={compact}
-                  />
-                ))}
-              </div>
-            ) : (
-              <EmptyCard
-                title="No hero suggestions yet"
-                description="Choose your role and wait for enemy picks to arrive."
-              />
-            )}
+            <PickAssistant
+              active
+              compact={compact}
+              enemyHeroNames={enemyHeroNames}
+              limit={compact ? 6 : 8}
+              role={role}
+            />
           </div>
         </section>
       ) : null}
 
-      {inMatch ? (
+      {phase === "match" ? (
         <>
           <div className="intel-tabs">
             <button
@@ -314,87 +210,65 @@ export default function IntelBoard({
               className={activeTab === "items" ? "intel-tab intel-tab--active" : "intel-tab"}
               onClick={() => setActiveTab("items")}
             >
-              {audienceMode === "spectator" ? "Hero Items" : "Item Suggestions"}
+              Best Items
             </button>
             <button
               type="button"
               className={activeTab === "hp" ? "intel-tab intel-tab--active" : "intel-tab"}
               onClick={() => setActiveTab("hp")}
             >
-              {enemyLabel} HP
+              Enemy HP
             </button>
           </div>
 
           {activeTab === "items" ? (
             <section className="intel-panel">
               <div className="intel-section-header">
-                <h3>{audienceMode === "spectator" ? "Observed Hero Items" : "Item Suggestions"}</h3>
-                <span>
-                  {audienceMode === "spectator"
-                    ? enemyInventories.length
-                    : itemLoading
-                      ? "updating..."
-                      : itemResults.length}
-                </span>
+                <h3>Best Items</h3>
+                <span>{enemyHeroNames.length ? `${enemyHeroNames.length} enemies` : "No enemies yet"}</span>
               </div>
-
-              {audienceMode === "spectator" ? (
-                enemyInventories.length ? (
-                  <div className="enemy-loadout-stack">
-                    {enemyInventories.map((inventory) => (
-                      <EnemyInventory
-                        key={`${inventory.heroId || inventory.heroName}-inventory`}
-                        inventory={inventory}
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  <EmptyCard
-                    title={`${enemyLabel} inventories unavailable`}
-                    description="If your GSI payload includes hero items, they will be grouped here automatically."
-                  />
-                )
-              ) : itemLoading ? (
-                <EmptyCard
-                  title="Evaluating item timing"
-                  description="Running your item-response RPC against the current enemy inventory."
-                />
-              ) : itemResults.length ? (
-                <div className="intel-suggestion-list">
-                  {itemResults.map((item) => (
-                    <ItemSuggestionCard key={`${item.itemId}-${item.itemName}`} item={item} />
-                  ))}
-                </div>
-              ) : (
-                <EmptyCard
-                  title="No item suggestions yet"
-                  description="The panel needs your hero and enemy context before it can score purchases."
-                />
-              )}
+              <ItemAssistant
+                active
+                enemyHeroNames={enemyHeroNames}
+                enemyItemNames={matchState?.enemyItemNames || []}
+                limit={compact ? 5 : 8}
+                myHeroName={heroName}
+              />
             </section>
           ) : null}
 
           {activeTab === "hp" ? (
             <section className="intel-panel">
               <div className="intel-section-header">
-                <h3>{enemyLabel} HP</h3>
+                <h3>Enemy Health</h3>
                 <span>{enemyHealth.length}</span>
               </div>
 
               {enemyHealth.length ? (
                 <div className="enemy-health-list">
                   {enemyHealth.map((hero) => (
-                    <HealthRow key={`${hero.id}-${hero.name}`} hero={hero} />
+                    <HealthRow key={hero.key || hero.heroName} hero={hero} />
+                  ))}
+                </div>
+              ) : enemyHeroNames.length ? (
+                <div className="enemy-health-list">
+                  {enemyHeroNames.map((heroNameValue) => (
+                    <HealthRow
+                      key={heroNameValue}
+                      hero={{
+                        heroName: heroNameValue,
+                        currentHealth: null,
+                        maxHealth: null,
+                        healthPercent: 100,
+                        imageUrl: null,
+                      }}
+                    />
                   ))}
                 </div>
               ) : (
                 <EmptyCard
-                  title={`${enemyLabel} health feed inactive`}
-                  description={
-                    audienceMode === "spectator"
-                      ? "If the observer payload includes visible hero health, this panel will update live."
-                      : "This payload currently does not include enemy hero health. Player-mode GSI often only exposes your local hero unless Dota sends visible enemy data."
-                  }
+                  title="No enemy heroes detected yet"
+                  description="Once enemy heroes are known from draft or live packets, they will appear here at 100% HP by default."
                 />
               )}
             </section>
@@ -406,23 +280,23 @@ export default function IntelBoard({
         <div className={`intel-grid ${compact ? "intel-grid--stacked" : ""}`}>
           <section className="intel-panel">
             <div className="intel-section-header">
-              <h3>Draft Window</h3>
-              <span>Counter Picks</span>
+              <h3>Best Picks</h3>
+              <span>Draft only</span>
             </div>
             <EmptyCard
-              title="Before the horn"
-              description="During the picking phase, this board switches to observed picks and role-based counter recommendations."
+              title="Waiting for draft data"
+              description="During hero selection, this panel switches to enemy picks and role-based counter recommendations."
             />
           </section>
 
           <section className="intel-panel">
             <div className="intel-section-header">
-              <h3>Match Window</h3>
-              <span>Items + HP</span>
+              <h3>Best Items + Enemy HP</h3>
+              <span>Match only</span>
             </div>
             <EmptyCard
-              title="After the lane starts"
-              description="Once the match is live, the same layout pivots into enemy health and item suggestions."
+              title="Waiting for live match data"
+              description="After the match starts, the board switches to item suggestions and a live enemy health list."
             />
           </section>
         </div>

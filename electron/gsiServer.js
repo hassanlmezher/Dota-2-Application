@@ -1,3 +1,5 @@
+const bodyParser = require("body-parser");
+const cors = require("cors");
 const express = require("express");
 const { EventEmitter } = require("node:events");
 
@@ -236,7 +238,8 @@ function createGsiServer({ port = 3001, host = "127.0.0.1" } = {}) {
   let latestState = null;
   let packetCount = 0;
 
-  app.use(express.json({ limit: "2mb", type: "*/*" }));
+  app.use(cors());
+  app.use(bodyParser.json({ limit: "2mb", type: "*/*" }));
 
   app.get("/health", (_request, response) => {
     response.json({
@@ -249,8 +252,13 @@ function createGsiServer({ port = 3001, host = "127.0.0.1" } = {}) {
   });
 
   app.post(["/", "/gsi"], (request, response) => {
-    latestState = normalizeState(request.body || {});
     packetCount += 1;
+    console.log("Received GSI update");
+    latestState = {
+      ...normalizeState(request.body || {}),
+      payload: request.body || {},
+      packetCount,
+    };
     emitter.emit("state", latestState);
     emitter.emit("status", getStatus());
 

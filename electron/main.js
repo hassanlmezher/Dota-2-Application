@@ -318,6 +318,8 @@ function handleGsiState(nextState) {
 async function bootstrap() {
   registerIpcHandlers();
   await createMainWindow();
+  await ensureOverlayWindow("launcher");
+  hideOverlayWindow();
 
   gsiServer = createGsiServer({ port: GSI_PORT });
   gsiServer.on("state", handleGsiState);

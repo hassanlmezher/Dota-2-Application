@@ -1,199 +1,203 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import ItemCard from "../components/ItemCard";
-import Loader from "../components/Loader";
-import SearchBar from "../components/SearchBar";
+import { resolveHeroName, resolveHeroNames, resolveItemNames } from "../api/supabaseClient";
 import { useItemSuggestions } from "../hooks/useItemSuggestions";
-import { supabase } from "../api/supabaseClient";
-import { ITEM_CATEGORY_LABELS } from "../constants/dotaItemCategories";
 
-function saveRecentSearch(entry) {
-  const storageKey = "dota-helper:recent-item-searches";
-  const current = JSON.parse(window.localStorage.getItem(storageKey) || "[]");
-  const next = [entry, ...current].slice(0, 10);
-  window.localStorage.setItem(storageKey, JSON.stringify(next));
+function EmptyCard({ title, description }) {
+  return (
+    <div className="intel-empty">
+      <h4>{title}</h4>
+      <p>{description}</p>
+    </div>
+  );
 }
 
-export default function ItemAssistant() {
-  const [myHeroId, setMyHeroId] = useState(null);
-  const [enemyHeroIds, setEnemyHeroIds] = useState([]);
-  const [enemyItemIds, setEnemyItemIds] = useState([]);
-  const [heroes, setHeroes] = useState([]);
-  const [items, setItems] = useState([]);
-  const [directoryError, setDirectoryError] = useState("");
-  const [loadingDirectory, setLoadingDirectory] = useState(true);
+export default function ItemAssistant({
+  myHeroName = "",
+  enemyHeroNames = [],
+  enemyItemNames = [],
+  limit = 8,
+  active = true,
+}) {
   const { results, loading, error, runItemSearch } = useItemSuggestions();
+  const [resolvedMyHero, setResolvedMyHero] = useState(null);
+  const [resolvedEnemyHeroes, setResolvedEnemyHeroes] = useState([]);
+  const [resolvedEnemyItems, setResolvedEnemyItems] = useState([]);
+  const [resolutionError, setResolutionError] = useState("");
+  const [resolving, setResolving] = useState(false);
+  const normalizedEnemyNames = useMemo(
+    () => [...new Set(enemyHeroNames.filter(Boolean))],
+    [enemyHeroNames]
+  );
+  const normalizedEnemyItemNames = useMemo(
+    () => [...new Set(enemyItemNames.filter(Boolean))],
+    [enemyItemNames]
+  );
+  const enemyHeroKey = normalizedEnemyNames.join("|");
+  const enemyItemKey = normalizedEnemyItemNames.join("|");
+  const enemyHeroIds = resolvedEnemyHeroes.map((hero) => hero.heroId).filter(Boolean);
+  const enemyItemIds = resolvedEnemyItems.map((item) => item.itemId).filter(Boolean);
 
   useEffect(() => {
     let isMounted = true;
 
-    async function loadDirectories() {
-      setLoadingDirectory(true);
-      setDirectoryError("");
-
-      if (!supabase) {
-        setDirectoryError("Supabase client is not configured.");
-        setLoadingDirectory(false);
+    async function resolveMatchContext() {
+      if (!active) {
+        setResolvedMyHero(null);
+        setResolvedEnemyHeroes([]);
+        setResolvedEnemyItems([]);
+        setResolutionError("");
+        setResolving(false);
         return;
       }
 
-      const [heroesResponse, itemsResponse] = await Promise.all([
-        supabase
-          .from("heroes")
-          .select("hero_id, hero_name, image_url, primary_attribute")
-          .order("hero_name", { ascending: true }),
-        supabase
-          .from("items")
-          .select("item_id, item_name, image_url, category, cost")
-          .order("item_name", { ascending: true }),
-      ]);
-
-      if (!isMounted) {
+      if (!myHeroName) {
+        setResolvedMyHero(null);
+        setResolvedEnemyHeroes([]);
+        setResolvedEnemyItems([]);
+        setResolutionError("");
+        setResolving(false);
         return;
       }
 
-      if (heroesResponse.error) {
-        setDirectoryError(heroesResponse.error.message);
-        setLoadingDirectory(false);
-        return;
+      try {
+        setResolving(true);
+        setResolutionError("");
+        const [nextMyHero, nextEnemyHeroes, nextEnemyItems] = await Promise.all([
+          resolveHeroName(myHeroName),
+          resolveHeroNames(normalizedEnemyNames),
+          resolveItemNames(normalizedEnemyItemNames),
+        ]);
+
+        if (!isMounted) {
+          return;
+        }
+
+        setResolvedMyHero(nextMyHero || null);
+        setResolvedEnemyHeroes(nextEnemyHeroes);
+        setResolvedEnemyItems(nextEnemyItems);
+
+        if (!nextMyHero) {
+          setResolutionError(
+            `Your current hero "${myHeroName}" was not found in the Supabase heroes table.`
+          );
+        } else if (!nextEnemyHeroes.length && normalizedEnemyNames.length) {
+          setResolutionError(
+            "Enemy heroes were detected from GSI, but none matched the Supabase hero catalog."
+          );
+        }
+      } catch (requestError) {
+        if (isMounted) {
+          setResolutionError(requestError?.message || "Failed to resolve match context.");
+          setResolvedMyHero(null);
+          setResolvedEnemyHeroes([]);
+          setResolvedEnemyItems([]);
+        }
+      } finally {
+        if (isMounted) {
+          setResolving(false);
+        }
       }
-
-      if (itemsResponse.error) {
-        setDirectoryError(itemsResponse.error.message);
-        setLoadingDirectory(false);
-        return;
-      }
-
-      setHeroes(
-        (heroesResponse.data || []).map((hero) => ({
-          value: hero.hero_id,
-          label: hero.hero_name,
-          imageUrl: hero.image_url,
-          meta: hero.primary_attribute,
-        }))
-      );
-
-      setItems(
-        (itemsResponse.data || []).map((item) => ({
-          value: item.item_id,
-          label: item.item_name,
-          imageUrl: item.image_url,
-          meta: ITEM_CATEGORY_LABELS[item.category] || item.category,
-        }))
-      );
-
-      setLoadingDirectory(false);
     }
 
-    loadDirectories();
+    resolveMatchContext();
 
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [active, myHeroName, enemyHeroKey, enemyItemKey]);
 
-  async function handleSubmit(event) {
-    event.preventDefault();
+  useEffect(() => {
+    if (!active || !resolvedMyHero?.heroId || !enemyHeroIds.length) {
+      return;
+    }
 
-    const nextResults = await runItemSearch({
-      heroId: myHeroId,
+    runItemSearch({
+      heroId: resolvedMyHero.heroId,
       enemyHeroIds,
       enemyItemIds,
+      limit,
     });
+  }, [
+    active,
+    limit,
+    resolvedMyHero?.heroId,
+    enemyHeroIds.join(","),
+    enemyItemIds.join(","),
+  ]);
 
-    if (nextResults.length) {
-      saveRecentSearch({
-        id: crypto.randomUUID(),
-        heroName: heroes.find((hero) => hero.value === myHeroId)?.label || "Unknown Hero",
-        enemyHeroes: heroes
-          .filter((hero) => enemyHeroIds.includes(hero.value))
-          .map((hero) => hero.label),
-        createdAt: new Date().toISOString(),
-      });
-    }
+  if (!active) {
+    return null;
+  }
+
+  if (!myHeroName) {
+    return (
+      <EmptyCard
+        title="Waiting for your hero"
+        description="The item assistant starts once the GSI feed knows which hero you are playing."
+      />
+    );
+  }
+
+  if (!normalizedEnemyNames.length) {
+    return (
+      <EmptyCard
+        title="No enemy heroes detected yet"
+        description="Item recommendations require at least one enemy hero from the live feed."
+      />
+    );
+  }
+
+  if (resolving) {
+    return (
+      <EmptyCard
+        title="Resolving live match context"
+        description="Matching your hero, enemy heroes, and enemy items against Supabase tables."
+      />
+    );
+  }
+
+  if (resolutionError) {
+    return (
+      <EmptyCard
+        title="Context resolution failed"
+        description={resolutionError}
+      />
+    );
+  }
+
+  if (loading) {
+    return (
+      <EmptyCard
+        title="Scoring item responses"
+        description="Calling get_best_items_to_buy with the detected enemy lineup."
+      />
+    );
+  }
+
+  if (error) {
+    return (
+      <EmptyCard
+        title="Item RPC failed"
+        description={error}
+      />
+    );
+  }
+
+  if (!results.length) {
+    return (
+      <EmptyCard
+        title="No item suggestions yet"
+        description="The live context is present, but the item function has not returned any recommendations."
+      />
+    );
   }
 
   return (
-    <section className="page">
-      <div className="page-header">
-        <div>
-          <p className="eyebrow">Item Assistant</p>
-          <h1>Itemize against enemy heroes and threat items</h1>
-          <p className="page-lead">
-            Combine hero matchup context with enemy item pressure and translate it
-            into a prioritized buy list.
-          </p>
-        </div>
-      </div>
-
-      <div className="page-grid page-grid--two-column">
-        <form className="panel form-panel" onSubmit={handleSubmit}>
-          {loadingDirectory ? (
-            <Loader label="Loading heroes and items..." />
-          ) : (
-            <>
-              <SearchBar
-                label="My Hero"
-                placeholder="Choose your hero..."
-                options={heroes}
-                value={myHeroId}
-                onChange={setMyHeroId}
-                multi={false}
-              />
-
-              <SearchBar
-                label="Enemy Heroes"
-                placeholder="Search enemy heroes..."
-                options={heroes}
-                value={enemyHeroIds}
-                onChange={setEnemyHeroIds}
-                multi
-              />
-
-              <SearchBar
-                label="Enemy Items"
-                placeholder="Search enemy items..."
-                options={items}
-                value={enemyItemIds}
-                onChange={setEnemyItemIds}
-                multi
-              />
-            </>
-          )}
-
-          {directoryError ? <p className="error-text">{directoryError}</p> : null}
-
-          <button
-            type="submit"
-            className="button button-primary button-full"
-            disabled={loading || loadingDirectory || !myHeroId}
-          >
-            {loading ? "Generating build..." : "Get Best Items To Buy"}
-          </button>
-        </form>
-
-        <div className="panel result-panel">
-          <div className="section-heading">
-            <h2>Recommended Items</h2>
-            <span>{results.length} items</span>
-          </div>
-
-          {loading ? <Loader label="Evaluating item responses..." /> : null}
-          {error ? <p className="error-text">{error}</p> : null}
-
-          {!loading && !results.length && !error ? (
-            <p className="empty-state">
-              Select your hero, add optional enemy context, and run the search to see
-              item recommendations.
-            </p>
-          ) : null}
-
-          <div className="result-stack">
-            {results.map((item) => (
-              <ItemCard key={`${item.itemId}-${item.itemName}`} item={item} />
-            ))}
-          </div>
-        </div>
-      </div>
-    </section>
+    <div className="intel-suggestion-list">
+      {results.map((item) => (
+        <ItemCard key={`${item.itemId}-${item.itemName}`} item={item} />
+      ))}
+    </div>
   );
 }

@@ -1,5 +1,5 @@
-import { requireSupabase } from "./supabaseClient";
 import { formatHeroName } from "../utils/formatHeroName";
+import { getHeroCatalog, requireSupabase } from "./supabaseClient";
 
 function isRpcSignatureError(error) {
   const message = `${error?.message || ""} ${error?.details || ""}`.toLowerCase();
@@ -10,23 +10,33 @@ function isRpcSignatureError(error) {
   );
 }
 
-async function callCounterPickRpc(params) {
+function toScore(value) {
+  const numericValue = Number(
+    value?.total_score ??
+      value?.score ??
+      value?.final_score ??
+      value?.advantage_score ??
+      value?.counter_score ??
+      0
+  );
+
+  return Number.isFinite(numericValue) ? numericValue : 0;
+}
+
+async function callCounterPickRpc({ role, enemyHeroIds }) {
   const supabase = requireSupabase();
   const attempts = [
     {
-      p_role: params.role || null,
-      p_enemy_hero_ids: params.enemyHeroIds,
-      p_limit: params.limit,
+      enemy_ids: enemyHeroIds,
+      desired_role: role,
     },
     {
-      role: params.role || null,
-      enemy_hero_ids: params.enemyHeroIds,
-      limit: params.limit,
+      p_enemy_hero_ids: enemyHeroIds,
+      p_role: role,
     },
     {
-      selected_role: params.role || null,
-      selected_enemy_heroes: params.enemyHeroIds,
-      max_results: params.limit,
+      enemy_hero_ids: enemyHeroIds,
+      role,
     },
   ];
 
@@ -49,45 +59,46 @@ async function callCounterPickRpc(params) {
   throw lastError;
 }
 
-function mapCounterPick(result) {
-  const score =
-    result.score ??
-    result.final_score ??
-    result.total_score ??
-    result.advantage_score ??
-    result.counter_score ??
-    0;
+async function getCounterPicks({ role, enemyHeroIds = [], limit = 8 }) {
+  const normalizedEnemyIds = enemyHeroIds
+    .map((value) => Number(value))
+    .filter((value) => Number.isInteger(value));
 
-  return {
-    heroId: result.hero_id ?? result.id ?? null,
-    heroName: formatHeroName(result.hero_name || result.name || "Unknown Hero"),
-    imageUrl: result.image_url || result.hero_image_url || result.icon_url || null,
-    primaryAttribute: result.primary_attribute || null,
-    score,
-    reason:
-      result.reason ||
-      result.summary ||
-      `Strong projected lane and matchup value versus the selected enemy pool.`,
-    raw: result,
-  };
-}
-
-async function getCounterPicks({
-  role,
-  enemyHeroIds = [],
-  limit = 8,
-}) {
-  if (!enemyHeroIds.length) {
+  if (!normalizedEnemyIds.length) {
     return [];
   }
 
-  const results = await callCounterPickRpc({
-    role,
-    enemyHeroIds,
-    limit,
-  });
+  const [results, heroCatalog] = await Promise.all([
+    callCounterPickRpc({
+      role,
+      enemyHeroIds: normalizedEnemyIds,
+    }),
+    getHeroCatalog(),
+  ]);
+  const heroesById = new Map(heroCatalog.map((hero) => [String(hero.heroId), hero]));
+  const heroesByName = new Map(heroCatalog.map((hero) => [hero.heroName, hero]));
 
-  return results.map(mapCounterPick);
+  return results.slice(0, limit).map((result) => {
+    const heroId = result.hero_id ?? result.id ?? null;
+    const heroName = formatHeroName(result.hero_name || result.name || "Unknown Hero");
+    const meta =
+      (heroId !== null ? heroesById.get(String(heroId)) : null) ||
+      heroesByName.get(heroName) ||
+      null;
+
+    return {
+      heroId: meta?.heroId ?? heroId,
+      heroName: meta?.heroName || heroName,
+      imageUrl: meta?.imageUrl || result.image_url || result.hero_image_url || null,
+      primaryAttribute: meta?.primaryAttribute || result.primary_attribute || null,
+      score: toScore(result),
+      reason:
+        result.reason ||
+        result.summary ||
+        `Recommended against ${normalizedEnemyIds.length} detected enemy heroes for the ${role} role.`,
+      raw: result,
+    };
+  });
 }
 
 export const counterPicksApi = {

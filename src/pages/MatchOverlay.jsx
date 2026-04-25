@@ -14,6 +14,12 @@ export default function MatchOverlay() {
     offsetY: 0,
   });
   const overlayMode = gsi?.overlayState?.mode || "launcher";
+  const phaseLabel =
+    gsi?.matchState?.phase === "draft"
+      ? "Draft"
+      : gsi?.matchState?.phase === "match"
+        ? "Live Match"
+        : "Awaiting GSI";
 
   function handleRoleChange(nextRole) {
     setRole(nextRole);
@@ -130,6 +136,7 @@ export default function MatchOverlay() {
           <div>
             <span className="surface-nav__eyebrow">DOTA HELPER</span>
             <strong>Compact Overlay</strong>
+            <small>{phaseLabel}</small>
           </div>
 
           <div className="overlay-panel-header__actions no-drag">

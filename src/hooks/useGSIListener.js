@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createEmptyGsiState, reduceGsiState } from "../utils/gsiPayload";
 
 const fallbackStatus = {
   running: false,
@@ -14,13 +15,19 @@ const fallbackOverlayState = {
   mode: "launcher",
 };
 
+function getElectronApi() {
+  return window.electronAPI || null;
+}
+
 export function useGSIListener({ autoStart = true } = {}) {
-  const [matchState, setMatchState] = useState(null);
+  const [matchState, setMatchState] = useState(createEmptyGsiState());
   const [serverStatus, setServerStatus] = useState(fallbackStatus);
   const [overlayState, setOverlayState] = useState(fallbackOverlayState);
 
   useEffect(() => {
-    if (!window.electronAPI?.gsi) {
+    const electronAPI = getElectronApi();
+
+    if (!electronAPI) {
       return undefined;
     }
 
@@ -29,35 +36,62 @@ export function useGSIListener({ autoStart = true } = {}) {
     let removeOverlayStateListener = () => {};
     let isMounted = true;
 
-    async function initialize() {
-      if (autoStart) {
-        const nextStatus = await window.electronAPI.gsi.start();
-        if (isMounted) {
-          setServerStatus(nextStatus);
-        }
-      }
+    function applyGsiUpdate(payload) {
+      setMatchState((currentState) => reduceGsiState(currentState, payload || {}));
+      setServerStatus((currentStatus) => ({
+        ...currentStatus,
+        packetCount:
+          payload?.packetCount ?? currentStatus.packetCount ?? fallbackStatus.packetCount,
+        lastReceivedAt:
+          payload?.receivedAt ?? currentStatus.lastReceivedAt ?? fallbackStatus.lastReceivedAt,
+      }));
+    }
 
-      const [latestState, latestStatus, nextOverlayState] = await Promise.all([
-        window.electronAPI.gsi.getState(),
-        window.electronAPI.gsi.getStatus(),
-        window.electronAPI.window?.getOverlayState?.() || fallbackOverlayState,
+    async function initialize() {
+      const startPromise =
+        autoStart && electronAPI.gsi?.start
+          ? electronAPI.gsi.start()
+          : Promise.resolve(fallbackStatus);
+      const latestStatePromise =
+        electronAPI.getLastGSI?.() ||
+        electronAPI.gsi?.getState?.() ||
+        Promise.resolve(null);
+      const latestStatusPromise =
+        electronAPI.gsi?.getStatus?.() || Promise.resolve(fallbackStatus);
+      const overlayStatePromise =
+        electronAPI.window?.getOverlayState?.() || Promise.resolve(fallbackOverlayState);
+
+      const [nextStatus, latestState, latestStatus, nextOverlayState] = await Promise.all([
+        startPromise,
+        latestStatePromise,
+        latestStatusPromise,
+        overlayStatePromise,
       ]);
 
-      if (isMounted) {
-        setMatchState(latestState);
-        setServerStatus(latestStatus);
-        setOverlayState(nextOverlayState || fallbackOverlayState);
+      if (!isMounted) {
+        return;
       }
 
-      removeStateListener = window.electronAPI.gsi.onState((payload) => {
-        setMatchState(payload);
-      });
-      removeStatusListener = window.electronAPI.gsi.onStatus((payload) => {
-        setServerStatus(payload);
-      });
-      removeOverlayStateListener = window.electronAPI.window?.onOverlayState?.((payload) => {
-        setOverlayState(payload || fallbackOverlayState);
-      }) || (() => {});
+      setServerStatus(latestStatus || nextStatus || fallbackStatus);
+      setOverlayState(nextOverlayState || fallbackOverlayState);
+      setMatchState(
+        latestState
+          ? reduceGsiState(createEmptyGsiState(), latestState)
+          : createEmptyGsiState()
+      );
+
+      removeStateListener =
+        electronAPI.onGSIUpdate?.(applyGsiUpdate) ||
+        electronAPI.gsi?.onState?.(applyGsiUpdate) ||
+        (() => {});
+      removeStatusListener =
+        electronAPI.gsi?.onStatus?.((payload) => {
+          setServerStatus(payload || fallbackStatus);
+        }) || (() => {});
+      removeOverlayStateListener =
+        electronAPI.window?.onOverlayState?.((payload) => {
+          setOverlayState(payload || fallbackOverlayState);
+        }) || (() => {});
     }
 
     initialize();
@@ -71,33 +105,38 @@ export function useGSIListener({ autoStart = true } = {}) {
   }, [autoStart]);
 
   async function toggleOverlay() {
-    return window.electronAPI?.window?.toggleOverlay?.();
+    const electronAPI = getElectronApi();
+    return electronAPI?.toggleOverlay?.() || electronAPI?.window?.toggleOverlay?.();
   }
 
   async function showOverlay(mode = "launcher") {
-    return window.electronAPI?.window?.showOverlay?.(mode);
+    return getElectronApi()?.window?.showOverlay?.(mode);
   }
 
   async function hideOverlay() {
-    return window.electronAPI?.window?.hideOverlay?.();
+    return getElectronApi()?.window?.hideOverlay?.();
   }
 
   async function setOverlayMode(mode) {
-    return window.electronAPI?.window?.setOverlayMode?.(mode);
+    return getElectronApi()?.window?.setOverlayMode?.(mode);
   }
 
   async function moveOverlay(x, y) {
-    return window.electronAPI?.window?.moveOverlay?.({ x, y });
+    return getElectronApi()?.window?.moveOverlay?.({ x, y });
   }
 
   async function focusMainWindow() {
-    return window.electronAPI?.window?.focusMain?.();
+    return getElectronApi()?.window?.focusMain?.();
   }
 
   return {
     matchState,
     serverStatus,
     overlayState,
+    myHeroName: matchState.myHeroName,
+    enemyHeroNames: matchState.enemyHeroNames,
+    enemyHealthMap: matchState.enemyHealthMap,
+    enemyItemNames: matchState.enemyItemNames,
     focusMainWindow,
     hideOverlay,
     moveOverlay,
