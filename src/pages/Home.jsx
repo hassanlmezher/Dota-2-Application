@@ -78,9 +78,9 @@ export default function Home() {
           <span className="landing-badge">No GSI setup required</span>
           <h1>Dota capture overlay</h1>
           <p>
-            Pick the Dota 2 window or the monitor where Dota is visible. The app reads
-            the screen to infer draft heroes, live enemy health, and item responses for
-            bots, real matches, and spectating.
+            The app now auto-locks onto Dota when you press start. It reads the screen
+            to infer draft heroes, live enemy health, and item responses for bots, real
+            matches, and spectating.
           </p>
 
           <div className="landing-hero__actions">
@@ -95,7 +95,7 @@ export default function Home() {
             ) : (
               <button type="button" className="dota-cta" onClick={handleStartCapture}>
                 <span className="dota-cta__icon">▶</span>
-                <span>Choose Dota Window</span>
+                <span>Start Scan</span>
               </button>
             )}
 

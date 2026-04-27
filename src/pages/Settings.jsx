@@ -136,11 +136,11 @@ export default function Settings() {
             </div>
 
             <div className="settings-callout settings-callout--clean">
-              <strong>How to use capture</strong>
+              <strong>How capture works</strong>
               <p>
-                Choose the Dota 2 window when possible. If Dota is running in a mode
-                that does not expose a window source, choose the monitor where the game
-                is visible instead.
+                The desktop app now tries to auto-select Dota 2 first. On macOS, if
+                Screen Recording permission is blocked, enable it for this app and then
+                restart the app.
               </p>
             </div>
 

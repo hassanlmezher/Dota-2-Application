@@ -170,7 +170,7 @@ export default function IntelBoard({
                 ? `Using ${heroName ? `${heroName} as the focus hero` : "the visible HUD"} to score item responses and estimate enemy HP.`
                 : captureActive
                   ? "Keep the Dota HUD visible and unobstructed. The app needs the top hero bar and, for live matches, the focused hero HUD."
-                  : "Choose the Dota window or display to begin. No GSI file is required in this mode."}
+                  : "Press start to auto-scan Dota. No GSI file is required in this mode."}
           </p>
         </div>
 

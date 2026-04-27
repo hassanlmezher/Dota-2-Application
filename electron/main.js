@@ -1,4 +1,12 @@
-const { app, dialog, ipcMain } = require("electron");
+const {
+  app,
+  desktopCapturer,
+  dialog,
+  ipcMain,
+  screen,
+  session,
+  systemPreferences,
+} = require("electron");
 const fs = require("node:fs");
 const path = require("node:path");
 const { createGsiServer } = require("./gsiServer.js");
@@ -40,8 +48,112 @@ const GSI_CONFIG_CONTENT = `"DotaHelper"
 
 let latestMatchState = null;
 let gsiServer = null;
+let preferredCaptureSourceId = null;
 
 app.commandLine.appendSwitch("disable-renderer-backgrounding");
+
+function getScreenAccessStatus() {
+  if (process.platform === "darwin") {
+    return systemPreferences.getMediaAccessStatus("screen");
+  }
+
+  return "granted";
+}
+
+function normalizeCaptureSource(source) {
+  return {
+    id: source.id,
+    name: source.name,
+    displayId: source.display_id || null,
+    kind: source.id.startsWith("window:") ? "window" : "screen",
+  };
+}
+
+async function getCaptureSources() {
+  const sources = await desktopCapturer.getSources({
+    types: ["window", "screen"],
+    fetchWindowIcons: false,
+    thumbnailSize: {
+      width: 0,
+      height: 0,
+    },
+  });
+
+  return sources;
+}
+
+function isLikelyDotaSource(source) {
+  return /dota\s*2|dota/i.test(source?.name || "");
+}
+
+function pickBestCaptureSource(sources = []) {
+  if (!sources.length) {
+    return null;
+  }
+
+  const preferredSource = preferredCaptureSourceId
+    ? sources.find((source) => source.id === preferredCaptureSourceId)
+    : null;
+
+  if (preferredSource) {
+    return preferredSource;
+  }
+
+  const dotaWindow = sources.find(
+    (source) => source.id.startsWith("window:") && isLikelyDotaSource(source)
+  );
+
+  if (dotaWindow) {
+    return dotaWindow;
+  }
+
+  const dotaScreen = sources.find(
+    (source) => source.id.startsWith("screen:") && isLikelyDotaSource(source)
+  );
+
+  if (dotaScreen) {
+    return dotaScreen;
+  }
+
+  const primaryScreen = screen
+    .getAllDisplays()
+    .find((display) => display.bounds.x === 0 && display.bounds.y === 0);
+
+  if (primaryScreen) {
+    const matchingPrimaryScreen = sources.find(
+      (source) =>
+        source.id.startsWith("screen:") &&
+        String(source.display_id || "") === String(primaryScreen.id)
+    );
+
+    if (matchingPrimaryScreen) {
+      return matchingPrimaryScreen;
+    }
+  }
+
+  const firstScreen = sources.find((source) => source.id.startsWith("screen:"));
+
+  return firstScreen || sources[0] || null;
+}
+
+function registerDisplayMediaHandler() {
+  session.defaultSession.setDisplayMediaRequestHandler(async (_request, callback) => {
+    try {
+      const sources = await getCaptureSources();
+      const source = pickBestCaptureSource(sources);
+
+      if (!source) {
+        callback({});
+        return;
+      }
+
+      callback({ video: source });
+    } catch (error) {
+      console.error("Failed to resolve display media source", error);
+      callback({});
+    }
+  });
+}
 
 function getSteamRootCandidates() {
   const homeDirectory = app.getPath("home");
@@ -224,6 +336,20 @@ function registerIpcHandlers() {
     gsiPort: GSI_PORT,
   }));
 
+  ipcMain.handle("capture:get-screen-access-status", () => getScreenAccessStatus());
+  ipcMain.handle("capture:list-sources", async () => {
+    const sources = await getCaptureSources();
+    return sources.map(normalizeCaptureSource);
+  });
+  ipcMain.handle("capture:set-preferred-source", async (_event, sourceId) => {
+    preferredCaptureSourceId = sourceId || null;
+    return {
+      ok: true,
+      preferredCaptureSourceId,
+    };
+  });
+  ipcMain.handle("capture:get-preferred-source", () => preferredCaptureSourceId);
+
   ipcMain.handle("gsi:start", async () => {
     if (!gsiServer) {
       gsiServer = createGsiServer({ port: GSI_PORT });
@@ -318,6 +444,7 @@ function handleGsiState(nextState) {
 
 async function bootstrap() {
   registerIpcHandlers();
+  registerDisplayMediaHandler();
   await createMainWindow();
   await ensureOverlayWindow("launcher");
   hideOverlayWindow();

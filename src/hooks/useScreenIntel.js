@@ -262,6 +262,21 @@ export function useScreenIntel() {
       return { ok: true, message: "Capture already running." };
     }
 
+    const electronApi = getElectronApi();
+    const screenAccessStatus = await electronApi?.capture?.getScreenAccessStatus?.();
+
+    if (screenAccessStatus === "denied" || screenAccessStatus === "restricted") {
+      const message =
+        "macOS is blocking screen capture. Enable Screen Recording for this app in System Settings > Privacy & Security > Screen Recording, then restart the app.";
+      updateStatus({
+        status: "error",
+        active: false,
+        error: message,
+        ownerId: null,
+      });
+      return { ok: false, message };
+    }
+
     channelRef.current?.postMessage({
       type: "screen:takeover",
       sender: instanceId,
@@ -381,16 +396,23 @@ export function useScreenIntel() {
 
       return { ok: true };
     } catch (error) {
+      const isPermissionError =
+        error?.name === "NotAllowedError" ||
+        /permission|notallowed|denied/i.test(error?.message || "");
+      const message = isPermissionError
+        ? "Screen capture was blocked. On macOS, allow Screen Recording for this app and then restart it."
+        : error?.message || "Failed to start screen capture.";
+
       stopCaptureInternal({
         broadcast: true,
         clearState: true,
         stopTracks: true,
         status: "error",
-        error: error?.message || "Failed to start screen capture.",
+        error: message,
       });
       return {
         ok: false,
-        message: error?.message || "Failed to start screen capture.",
+        message,
       };
     }
   }

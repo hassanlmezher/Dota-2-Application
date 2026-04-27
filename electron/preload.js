@@ -17,6 +17,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
   app: {
     getInfo: () => ipcRenderer.invoke("app:get-info"),
   },
+  capture: {
+    getScreenAccessStatus: () => ipcRenderer.invoke("capture:get-screen-access-status"),
+    listSources: () => ipcRenderer.invoke("capture:list-sources"),
+    setPreferredSource: (sourceId) =>
+      ipcRenderer.invoke("capture:set-preferred-source", sourceId),
+    getPreferredSource: () => ipcRenderer.invoke("capture:get-preferred-source"),
+  },
   gsi: {
     start: () => ipcRenderer.invoke("gsi:start"),
     getState: () => ipcRenderer.invoke("gsi:get-latest-state"),
