@@ -41,6 +41,8 @@ const GSI_CONFIG_CONTENT = `"DotaHelper"
 let latestMatchState = null;
 let gsiServer = null;
 
+app.commandLine.appendSwitch("disable-renderer-backgrounding");
+
 function getSteamRootCandidates() {
   const homeDirectory = app.getPath("home");
 
@@ -319,13 +321,6 @@ async function bootstrap() {
   await createMainWindow();
   await ensureOverlayWindow("launcher");
   hideOverlayWindow();
-
-  gsiServer = createGsiServer({ port: GSI_PORT });
-  gsiServer.on("state", handleGsiState);
-  gsiServer.on("status", (status) => {
-    broadcastToWindows("gsi:status", status);
-  });
-  await gsiServer.start();
   notifyOverlayState();
 }
 

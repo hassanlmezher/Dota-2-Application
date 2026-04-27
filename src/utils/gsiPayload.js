@@ -131,6 +131,72 @@ function normalizeEntries(collection = {}, sourceName = "collection") {
     .filter(Boolean);
 }
 
+function flattenObserverTeamCollections(rawPayload = {}) {
+  const mergedParticipants = new Map();
+  const collections = [
+    { collection: rawPayload.player, field: "player" },
+    { collection: rawPayload.hero, field: "hero" },
+    { collection: rawPayload.items, field: "items" },
+  ];
+
+  for (const { collection, field } of collections) {
+    if (!collection || Array.isArray(collection) || typeof collection !== "object") {
+      continue;
+    }
+
+    for (const [teamKey, teamEntries] of Object.entries(collection)) {
+      if (!teamEntries || typeof teamEntries !== "object" || Array.isArray(teamEntries)) {
+        continue;
+      }
+
+      const normalizedTeam = normalizeTeam(teamKey);
+
+      for (const [playerKey, entry] of Object.entries(teamEntries)) {
+        if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+          continue;
+        }
+
+        const registryKey = `${normalizedTeam || teamKey}:${playerKey}`;
+        const existingEntry = mergedParticipants.get(registryKey) || {
+          key: registryKey,
+          team_name: normalizedTeam || teamKey,
+          slot: playerKey,
+        };
+
+        if (field === "player") {
+          existingEntry.player = entry;
+          existingEntry.player_name =
+            entry.player_name || entry.name || entry.pro_name || existingEntry.player_name;
+          existingEntry.steam_name =
+            entry.steam_name || entry.name || existingEntry.steam_name;
+          existingEntry.steamid = entry.steamid || entry.steam_id || existingEntry.steamid;
+        }
+
+        if (field === "hero") {
+          existingEntry.hero = entry;
+          existingEntry.hero_name =
+            entry.hero_name || entry.localized_name || entry.name || existingEntry.hero_name;
+          existingEntry.hero_id = entry.hero_id || entry.id || existingEntry.hero_id;
+          existingEntry.health = entry.health ?? existingEntry.health;
+          existingEntry.max_health = entry.max_health ?? existingEntry.max_health;
+          existingEntry.health_percent =
+            entry.health_percent ?? existingEntry.health_percent;
+          existingEntry.image = entry.image || existingEntry.image;
+          existingEntry.image_url = entry.image_url || existingEntry.image_url;
+        }
+
+        if (field === "items") {
+          existingEntry.items = entry;
+        }
+
+        mergedParticipants.set(registryKey, existingEntry);
+      }
+    }
+  }
+
+  return [...mergedParticipants.values()];
+}
+
 function extractItemNames(collection) {
   const entries = normalizeEntries(collection, "items");
 
@@ -285,6 +351,7 @@ function extractParticipant(entry, key) {
 function buildParticipantMap(update = {}, rawPayload = {}) {
   const participants = new Map();
   const sources = [
+    ...normalizeEntries(flattenObserverTeamCollections(rawPayload), "observer-flattened"),
     ...normalizeEntries(rawPayload.allplayers, "allplayers"),
     ...normalizeEntries(rawPayload.allheroes, "allheroes"),
     ...normalizeEntries(rawPayload.players, "players-raw"),
@@ -535,6 +602,7 @@ function createEmptyGsiState() {
     myItemNames: [],
     localTeam: null,
     audienceMode: "player",
+    feedScope: "unknown",
     enemyHeroes: [],
     enemyHeroNames: [],
     enemyHealthList: [],
@@ -569,6 +637,7 @@ function reduceGsiState(previousState, update) {
   }
 
   const liveParticipants = [...snapshot.participantMap.values()];
+  const feedScope = liveParticipants.length > 1 ? "observer" : snapshot.localHero.heroName ? "player" : "unknown";
   const enemyParticipants = liveParticipants.filter((participant) => {
     if (snapshot.localHero.team && participant.team) {
       return isOpposingTeam(participant.team, snapshot.localHero.team);
@@ -624,6 +693,7 @@ function reduceGsiState(previousState, update) {
       : baseState.myItemNames || [],
     localTeam: snapshot.localHero.team || baseState.localTeam || null,
     audienceMode,
+    feedScope,
     enemyHeroes,
     enemyHeroNames,
     enemyHealthList,

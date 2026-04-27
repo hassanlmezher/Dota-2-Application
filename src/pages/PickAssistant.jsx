@@ -18,6 +18,7 @@ export default function PickAssistant({
   limit = 8,
   compact = false,
   active = true,
+  feedScope = "unknown",
 }) {
   const { results, loading, error, runCounterPickSearch } = useCounterPicks();
   const [resolvedHeroes, setResolvedHeroes] = useState([]);
@@ -54,7 +55,7 @@ export default function PickAssistant({
 
         if (!nextHeroes.length) {
           setResolutionError(
-            "Enemy heroes were detected from GSI, but none matched the Supabase hero catalog."
+            "Enemy heroes were detected from screen capture, but none matched the Supabase hero catalog."
           );
         }
       } catch (requestError) {
@@ -96,7 +97,11 @@ export default function PickAssistant({
     return (
       <EmptyCard
         title="No enemy heroes detected yet"
-        description="As soon as the draft feed exposes enemy heroes, counter picks will appear here automatically."
+        description={
+          feedScope === "player"
+            ? "The capture is running, but the draft HUD is not readable enough yet to identify enemy heroes."
+            : "As soon as the draft HUD exposes enemy heroes clearly, counter picks will appear here automatically."
+        }
       />
     );
   }
@@ -105,7 +110,7 @@ export default function PickAssistant({
     return (
       <EmptyCard
         title="Resolving enemy heroes"
-        description="Matching live GSI hero names against the Supabase hero table."
+        description="Matching detected hero names against the Supabase hero table."
       />
     );
   }

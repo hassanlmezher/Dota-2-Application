@@ -1,0 +1,547 @@
+:root {
+  --bg-root: #0a0d12;
+  --bg-surface: rgba(16, 20, 27, 0.78);
+  --bg-surface-strong: rgba(14, 18, 24, 0.9);
+  --bg-surface-soft: rgba(255, 255, 255, 0.03);
+  --line: rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(255, 255, 255, 0.14);
+  --accent: #cb8e62;
+  --accent-soft: rgba(203, 142, 98, 0.18);
+  --accent-strong: #e3a67a;
+  --text-main: #f5f7fa;
+  --text-muted: rgba(245, 247, 250, 0.68);
+  --text-soft: rgba(245, 247, 250, 0.44);
+  --success: #79d6a6;
+  --danger: #f08b7f;
+  --shadow-panel: 0 24px 70px rgba(0, 0, 0, 0.35);
+}
+
+body {
+  color: var(--text-main);
+  background:
+    radial-gradient(circle at top right, rgba(203, 142, 98, 0.12), transparent 24%),
+    radial-gradient(circle at left bottom, rgba(95, 126, 187, 0.1), transparent 28%),
+    linear-gradient(180deg, #0b0f14 0%, #090c11 100%);
+}
+
+.app-shell {
+  background: transparent;
+}
+
+.page-shell {
+  width: min(1380px, calc(100vw - 40px));
+  padding: 20px 0 36px;
+}
+
+.surface-page--clean,
+.settings-page--clean {
+  gap: 18px;
+}
+
+.surface-nav--clean,
+.landing-hero--clean,
+.dashboard-surface--clean,
+.settings-sidebar--clean,
+.settings-panel--clean,
+.overlay-panel-shell--clean,
+.intel-panel,
+.intel-empty,
+.capture-status-card,
+.draft-chip,
+.intel-suggestion,
+.intel-item-card,
+.enemy-health-row,
+.settings-runtime-row,
+.settings-premium-card {
+  border: 1px solid var(--line);
+  background: var(--bg-surface);
+  box-shadow: none;
+  backdrop-filter: blur(16px);
+}
+
+.surface-nav--clean,
+.settings-sidebar--clean,
+.settings-panel--clean,
+.dashboard-surface--clean,
+.overlay-panel-shell--clean {
+  border-radius: 20px;
+}
+
+.surface-nav--clean {
+  position: static;
+  padding: 16px 22px;
+  background: rgba(14, 18, 24, 0.76);
+}
+
+.surface-nav__brand strong,
+.dashboard-surface__header h2,
+.landing-hero h1,
+.settings-sidebar h1,
+.intel-board__hero h2 {
+  font-family: "Manrope", sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+}
+
+.surface-nav__eyebrow,
+.intel-kicker,
+.landing-badge,
+.settings-sidebar__kicker {
+  color: var(--accent-strong);
+  letter-spacing: 0.14em;
+}
+
+.landing-hero--clean {
+  min-height: 360px;
+  padding: 54px;
+  background:
+    linear-gradient(135deg, rgba(14, 18, 24, 0.92), rgba(19, 23, 31, 0.74)),
+    url("/splash.png") center / cover no-repeat;
+}
+
+.landing-hero__content--clean {
+  max-width: 740px;
+}
+
+.landing-hero--clean h1 {
+  margin: 10px 0 14px;
+  font-size: clamp(2.8rem, 5vw, 4.4rem);
+}
+
+.landing-hero--clean p,
+.settings-sidebar--clean p,
+.settings-toggle-row p,
+.intel-board__hero p,
+.intel-empty p,
+.intel-suggestion p,
+.intel-item-card__reason,
+.enemy-health-row p {
+  color: var(--text-muted);
+}
+
+.capture-status-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.capture-status-card {
+  display: grid;
+  gap: 6px;
+  padding: 16px 18px;
+  border-radius: 16px;
+}
+
+.capture-status-card span {
+  color: var(--text-soft);
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.capture-status-card strong {
+  font-size: 0.98rem;
+  font-weight: 600;
+}
+
+.capture-inline-error {
+  margin-top: 16px;
+  color: var(--danger);
+}
+
+.dashboard-surface--clean,
+.settings-sidebar--clean,
+.settings-panel--clean {
+  padding: 24px;
+}
+
+.dashboard-surface__header,
+.settings-toggle-row,
+.settings-runtime-row,
+.enemy-health-row,
+.enemy-health-row__meta,
+.intel-suggestion,
+.intel-item-card__top,
+.surface-nav__actions,
+.landing-hero__actions,
+.overlay-panel-header__actions,
+.settings-footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.dashboard-surface__header,
+.settings-runtime-row,
+.settings-footer {
+  justify-content: space-between;
+}
+
+.settings-shell {
+  grid-template-columns: minmax(280px, 320px) minmax(0, 1fr);
+  gap: 18px;
+}
+
+.settings-content {
+  gap: 18px;
+}
+
+.settings-callout--clean {
+  margin-bottom: 18px;
+  padding: 16px 18px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.settings-runtime-list {
+  gap: 10px;
+}
+
+.settings-toggle-row,
+.settings-runtime-row {
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+}
+
+.settings-toggle-row:first-of-type,
+.settings-runtime-row:first-of-type {
+  border-top: 0;
+}
+
+.settings-runtime-row {
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--bg-surface-soft);
+}
+
+.settings-runtime-row span,
+.settings-footer span {
+  color: var(--text-soft);
+}
+
+.settings-switch {
+  width: 52px;
+  height: 30px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.settings-switch--active {
+  background: var(--accent);
+}
+
+.status-pill {
+  border-color: transparent;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-main);
+}
+
+.status-pill--online {
+  background: rgba(121, 214, 166, 0.12);
+  color: #c8f6db;
+}
+
+.status-pill--offline {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-muted);
+}
+
+.surface-icon-button,
+.surface-back-link,
+.surface-secondary-link,
+.surface-tertiary-button,
+.overlay-header-button,
+.dota-cta,
+.intel-tab,
+.intel-role-pill,
+.intel-role-orb {
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-main);
+  box-shadow: none;
+}
+
+.surface-icon-button,
+.surface-back-link,
+.surface-tertiary-button,
+.overlay-header-button {
+  min-height: 40px;
+}
+
+.surface-icon-button:hover,
+.surface-back-link:hover,
+.surface-secondary-link:hover,
+.surface-tertiary-button:hover,
+.overlay-header-button:hover,
+.dota-cta:hover,
+.intel-tab:hover,
+.intel-role-pill:hover,
+.intel-role-orb:hover {
+  border-color: var(--line-strong);
+  background: rgba(255, 255, 255, 0.07);
+  transform: none;
+}
+
+.dota-cta {
+  min-width: 220px;
+  min-height: 52px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(203, 142, 98, 0.26), rgba(203, 142, 98, 0.12));
+  color: #fff5ed;
+}
+
+.dota-cta--quiet {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.dashboard-surface__header h2,
+.intel-board__hero h2 {
+  margin: 4px 0 0;
+  font-size: clamp(2rem, 3.8vw, 3.2rem);
+}
+
+.intel-board--clean {
+  gap: 16px;
+}
+
+.intel-board__hero {
+  padding: 0;
+}
+
+.intel-board__hero-status {
+  align-items: flex-end;
+}
+
+.intel-board__diagnostic {
+  color: var(--text-soft);
+}
+
+.intel-panel,
+.intel-empty,
+.intel-suggestion,
+.intel-item-card,
+.enemy-health-row,
+.draft-chip {
+  border-radius: 18px;
+}
+
+.intel-panel {
+  padding: 18px;
+}
+
+.intel-empty {
+  gap: 10px;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.intel-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.intel-section-header h3,
+.enemy-health-row h4,
+.intel-suggestion h4,
+.intel-item-card h4 {
+  margin: 0;
+}
+
+.intel-section-header span {
+  color: var(--text-soft);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.intel-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.intel-tab {
+  min-height: 46px;
+  border-radius: 14px;
+}
+
+.intel-tab--active {
+  border-color: rgba(203, 142, 98, 0.45);
+  background: rgba(203, 142, 98, 0.16);
+}
+
+.intel-draft-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.intel-role-orb-rows {
+  gap: 10px;
+}
+
+.intel-role-orb {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+}
+
+.intel-role-orb--active {
+  border-color: rgba(203, 142, 98, 0.5);
+  background: rgba(203, 142, 98, 0.18);
+}
+
+.enemy-draft-list,
+.intel-suggestion-list,
+.enemy-health-list,
+.intel-grid {
+  gap: 12px;
+}
+
+.draft-chip {
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.intel-suggestion,
+.intel-item-card {
+  padding: 14px;
+}
+
+.intel-suggestion__hero,
+.intel-item-card__top,
+.enemy-health-row__meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.enemy-health-row {
+  justify-content: space-between;
+  padding: 14px 16px;
+}
+
+.enemy-health-row__bar {
+  position: relative;
+  flex: 1;
+  min-width: 120px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.enemy-health-row__bar span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #e38e7d, #79d6a6);
+}
+
+.intel-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.intel-avatar--small {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+}
+
+.intel-avatar__fallback {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.overlay-panel-shell--clean {
+  width: 100%;
+  height: 100%;
+  padding: 14px;
+  border-radius: 24px;
+  background: rgba(10, 14, 20, 0.86);
+}
+
+.overlay-panel-header {
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.overlay-panel-header strong,
+.overlay-panel-header small {
+  display: block;
+}
+
+.overlay-panel-header small {
+  margin-top: 4px;
+  color: var(--text-soft);
+}
+
+.overlay-launcher {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+}
+
+.overlay-launcher__button {
+  width: 60px;
+  height: 60px;
+  padding: 0;
+  border-radius: 18px;
+  border: 1px solid rgba(203, 142, 98, 0.28);
+  background: rgba(12, 16, 22, 0.84);
+  backdrop-filter: blur(16px);
+}
+
+.overlay-launcher__crest {
+  font-family: "Rajdhani", sans-serif;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--accent-strong);
+}
+
+@media (max-width: 1180px) {
+  .capture-status-grid,
+  .settings-shell {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .page-shell {
+    width: min(100vw - 20px, 1380px);
+  }
+
+  .surface-nav--clean,
+  .landing-hero--clean,
+  .dashboard-surface--clean,
+  .settings-sidebar--clean,
+  .settings-panel--clean {
+    padding: 18px;
+  }
+
+  .landing-hero--clean {
+    min-height: auto;
+  }
+
+  .landing-hero__actions,
+  .surface-nav__actions,
+  .settings-footer,
+  .settings-toggle-row,
+  .dashboard-surface__header,
+  .overlay-panel-header__actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

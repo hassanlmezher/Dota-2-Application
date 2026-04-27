@@ -27,6 +27,7 @@ function createOverlayWindow({ preloadPath, bounds }) {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      backgroundThrottling: false,
     },
   });
 

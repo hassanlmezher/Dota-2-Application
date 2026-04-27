@@ -12,11 +12,12 @@ function Avatar({ imageUrl, label }) {
   return <span className="intel-avatar__fallback">{label.slice(0, 2).toUpperCase()}</span>;
 }
 
-function EmptyCard({ title, description }) {
+function EmptyCard({ title, description, action }) {
   return (
     <div className="intel-empty">
       <h4>{title}</h4>
       <p>{description}</p>
+      {action || null}
     </div>
   );
 }
@@ -38,7 +39,9 @@ function HealthRow({ hero }) {
           <p>
             {hero.currentHealth !== null && hero.maxHealth !== null
               ? `${hero.currentHealth}/${hero.maxHealth} HP`
-              : "Hidden from vision, assumed full HP"}
+              : healthPercent === 100
+                ? "Hidden from view, assumed full HP"
+                : "Visible on screen"}
           </p>
         </div>
       </div>
@@ -52,16 +55,69 @@ function HealthRow({ hero }) {
   );
 }
 
+function DraftPanel({ compact, enemyHeroes, enemyHeroNames, role, onRoleChange }) {
+  return (
+    <section className="intel-panel intel-draft-panel">
+      <div className="intel-draft-role-block">
+        <div className="intel-section-header">
+          <h3>Role</h3>
+          <span>{ROLE_LOOKUP[role]}</span>
+        </div>
+        <RoleSelector value={role} onChange={onRoleChange} />
+      </div>
+
+      <div className="intel-draft-picks">
+        <div className="intel-section-header">
+          <h3>Enemy picks</h3>
+          <span>{enemyHeroNames.length}</span>
+        </div>
+
+        {enemyHeroes.length ? (
+          <div className="enemy-draft-list">
+            {enemyHeroes.map((hero) => (
+              <div className="draft-chip" key={hero.key || hero.heroName}>
+                <div className="intel-avatar intel-avatar--small">
+                  <Avatar imageUrl={hero.imageUrl} label={hero.heroName} />
+                </div>
+                <span>{hero.heroName}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <EmptyCard
+            title="No enemy picks yet"
+            description="Keep the draft HUD visible. Once the top bar portraits are readable, enemy picks appear here automatically."
+          />
+        )}
+      </div>
+
+      <div className="intel-draft-suggestions">
+        <div className="intel-section-header">
+          <h3>Best picks</h3>
+          <span>{ROLE_LOOKUP[role]}</span>
+        </div>
+        <PickAssistant
+          active
+          compact={compact}
+          enemyHeroNames={enemyHeroNames}
+          feedScope="screen"
+          limit={compact ? 5 : 8}
+          role={role}
+        />
+      </div>
+    </section>
+  );
+}
+
 export default function IntelBoard({
+  captureState,
   matchState,
-  serverStatus,
   role,
   onRoleChange,
   variant = "full",
 }) {
   const compact = variant === "compact";
   const phase = matchState?.phase || "idle";
-  const audienceMode = matchState?.audienceMode || "player";
   const heroName = matchState?.myHeroName || "";
   const enemyHeroes = matchState?.enemyHeroes || [];
   const enemyHeroNames = matchState?.enemyHeroNames || [];
@@ -76,9 +132,8 @@ export default function IntelBoard({
       })),
     [matchState?.enemyHealthList]
   );
-  const hasPackets = Boolean(serverStatus?.packetCount);
-  const hasAnyLiveContext = Boolean(matchState?.hasAnyLiveContext);
   const [activeTab, setActiveTab] = useState("items");
+  const captureActive = Boolean(captureState?.active);
 
   useEffect(() => {
     if (phase === "match") {
@@ -87,119 +142,63 @@ export default function IntelBoard({
   }, [phase]);
 
   return (
-    <section className={`intel-board intel-board--${variant}`}>
+    <section className={`intel-board intel-board--${variant} intel-board--clean`}>
       <div className="intel-board__hero">
         <div>
           <p className="intel-kicker">
             {phase === "draft"
-              ? audienceMode === "spectator"
-                ? "Observed draft"
-                : "Draft phase"
+              ? "Draft scan"
               : phase === "match"
-                ? audienceMode === "spectator"
-                  ? "Observed live match"
-                  : "Live match"
-                : "Awaiting Dota 2"}
+                ? "Live scan"
+                : captureActive
+                  ? "Scanning screen"
+                  : "Awaiting capture"}
           </p>
           <h2>
             {phase === "draft"
               ? "Enemy draft detected"
               : phase === "match"
                 ? heroName || "Live match detected"
-                : hasAnyLiveContext
-                  ? "Live feed connected"
-                  : "Waiting for live data"}
+                : captureActive
+                  ? "Looking for Dota HUD"
+                  : "Start screen capture"}
           </h2>
           <p>
             {phase === "draft"
-              ? `Role-based counter suggestions are tied to your selected role: ${ROLE_LOOKUP[role]}.`
+              ? "Counter picks come from the top bar heroes currently detected on screen."
               : phase === "match"
-                ? `Clock ${matchState?.clockLabel || "--:--"} • ${matchState?.mapStateLabel || "No match detected"}`
-                : hasAnyLiveContext
-                  ? "The app sees live Dota context and will populate heroes, items, and health as packets arrive."
-                  : hasPackets
-                    ? "Dota packets are arriving, but the current payload does not yet contain enough match context."
-                    : "No Dota packets received yet. Add -gamestateintegration to Dota 2 launch options and point Game State Integration at localhost:3001."}
+                ? `Using ${heroName ? `${heroName} as the focus hero` : "the visible HUD"} to score item responses and estimate enemy HP.`
+                : captureActive
+                  ? "Keep the Dota HUD visible and unobstructed. The app needs the top hero bar and, for live matches, the focused hero HUD."
+                  : "Choose the Dota window or display to begin. No GSI file is required in this mode."}
           </p>
         </div>
 
         <div className="intel-board__hero-status">
           <span
             className={`status-pill ${
-              serverStatus?.running ? "status-pill--online" : "status-pill--offline"
+              captureActive ? "status-pill--online" : "status-pill--offline"
             }`}
           >
-            {serverStatus?.running ? "GSI Listening" : "GSI Offline"}
+            {captureActive ? "Capture live" : "Capture idle"}
           </span>
           <small className="intel-board__diagnostic">
-            {hasPackets ? `Packets: ${serverStatus.packetCount}` : "Waiting for first packet"}
+            {captureState?.sourceLabel || "No source selected"}
           </small>
-          {phase === "match" && heroName ? (
-            <strong>{matchState?.myItemNames?.length || 0} current items</strong>
+          {captureState?.frameCount ? (
+            <strong>{captureState.frameCount} frames analyzed</strong>
           ) : null}
         </div>
       </div>
 
       {phase === "draft" ? (
-        <section className="intel-panel intel-draft-panel">
-          <div className="intel-draft-role-block">
-            <div className="intel-section-header">
-              <h3>Select Your Role</h3>
-              <span>{ROLE_LOOKUP[role]}</span>
-            </div>
-            <RoleSelector value={role} onChange={onRoleChange} />
-          </div>
-
-          <div className="intel-draft-picks">
-            <div className="intel-section-header">
-              <h3>Enemy Picks</h3>
-              <span>{enemyHeroNames.length}</span>
-            </div>
-
-            {enemyHeroes.length ? (
-              <div className="enemy-draft-list">
-                {enemyHeroes.map((hero) => (
-                  <div className="draft-chip" key={hero.key || hero.heroName}>
-                    <div className="intel-avatar intel-avatar--small">
-                      <Avatar imageUrl={hero.imageUrl} label={hero.heroName} />
-                    </div>
-                    <span>{hero.heroName}</span>
-                  </div>
-                ))}
-              </div>
-            ) : enemyHeroNames.length ? (
-              <div className="enemy-draft-list">
-                {enemyHeroNames.map((heroNameValue) => (
-                  <div className="draft-chip" key={heroNameValue}>
-                    <div className="intel-avatar intel-avatar--small">
-                      <Avatar imageUrl={null} label={heroNameValue} />
-                    </div>
-                    <span>{heroNameValue}</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <EmptyCard
-                title="No enemy heroes detected yet"
-                description="As soon as the draft feed exposes enemy heroes, they will appear here."
-              />
-            )}
-          </div>
-
-          <div className="intel-draft-suggestions">
-            <div className="intel-section-header">
-              <h3>Best Picks</h3>
-              <span>{ROLE_LOOKUP[role]}</span>
-            </div>
-            <PickAssistant
-              active
-              compact={compact}
-              enemyHeroNames={enemyHeroNames}
-              limit={compact ? 6 : 8}
-              role={role}
-            />
-          </div>
-        </section>
+        <DraftPanel
+          compact={compact}
+          enemyHeroes={enemyHeroes}
+          enemyHeroNames={enemyHeroNames}
+          role={role}
+          onRoleChange={onRoleChange}
+        />
       ) : null}
 
       {phase === "match" ? (
@@ -224,13 +223,14 @@ export default function IntelBoard({
           {activeTab === "items" ? (
             <section className="intel-panel">
               <div className="intel-section-header">
-                <h3>Best Items</h3>
-                <span>{enemyHeroNames.length ? `${enemyHeroNames.length} enemies` : "No enemies yet"}</span>
+                <h3>Best items</h3>
+                <span>{heroName || "Focus hero required"}</span>
               </div>
               <ItemAssistant
                 active
                 enemyHeroNames={enemyHeroNames}
                 enemyItemNames={matchState?.enemyItemNames || []}
+                feedScope="screen"
                 limit={compact ? 5 : 8}
                 myHeroName={heroName}
               />
@@ -240,7 +240,7 @@ export default function IntelBoard({
           {activeTab === "hp" ? (
             <section className="intel-panel">
               <div className="intel-section-header">
-                <h3>Enemy Health</h3>
+                <h3>Enemy health</h3>
                 <span>{enemyHealth.length}</span>
               </div>
 
@@ -268,7 +268,7 @@ export default function IntelBoard({
               ) : (
                 <EmptyCard
                   title="No enemy heroes detected yet"
-                  description="Once enemy heroes are known from draft or live packets, they will appear here at 100% HP by default."
+                  description="Keep the top hero portraits visible. Once the enemy lineup is readable, each enemy is listed here and starts at 100% HP by default."
                 />
               )}
             </section>
@@ -280,23 +280,31 @@ export default function IntelBoard({
         <div className={`intel-grid ${compact ? "intel-grid--stacked" : ""}`}>
           <section className="intel-panel">
             <div className="intel-section-header">
-              <h3>Best Picks</h3>
-              <span>Draft only</span>
+              <h3>Draft picks</h3>
+              <span>Top bar required</span>
             </div>
             <EmptyCard
-              title="Waiting for draft data"
-              description="During hero selection, this panel switches to enemy picks and role-based counter recommendations."
+              title={captureActive ? "Waiting for draft heroes" : "No capture yet"}
+              description={
+                captureActive
+                  ? "The app is scanning, but it has not locked onto enough top bar hero portraits yet."
+                  : "Start capture first, then keep the Dota top bar visible for automatic draft detection."
+              }
             />
           </section>
 
           <section className="intel-panel">
             <div className="intel-section-header">
-              <h3>Best Items + Enemy HP</h3>
-              <span>Match only</span>
+              <h3>Live match</h3>
+              <span>HUD required</span>
             </div>
             <EmptyCard
-              title="Waiting for live match data"
-              description="After the match starts, the board switches to item suggestions and a live enemy health list."
+              title={captureActive ? "Waiting for live HUD" : "Ready for live HP and items"}
+              description={
+                captureActive
+                  ? "Once the focused hero HUD and enemy portraits are readable, this board switches into item and HP mode."
+                  : "After capture starts, the board will switch automatically between draft and live match modes."
+              }
             />
           </section>
         </div>

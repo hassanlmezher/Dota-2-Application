@@ -251,6 +251,14 @@ function createGsiServer({ port = 3001, host = "127.0.0.1" } = {}) {
     });
   });
 
+  app.get("/latest", (_request, response) => {
+    response.json({
+      ok: true,
+      latestState,
+      rawKeys: latestState ? Object.keys(latestState.payload || latestState.raw || {}) : [],
+    });
+  });
+
   app.post(["/", "/gsi"], (request, response) => {
     packetCount += 1;
     console.log("Received GSI update");

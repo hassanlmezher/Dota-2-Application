@@ -4,30 +4,42 @@ import IntelBoard from "../components/IntelBoard";
 import { ROLE_LOOKUP } from "../constants/roles";
 import { PREFERENCE_KEYS, readPreference, writePreference } from "../utils/preferences";
 
-export default function Home() {
-  const gsi = useOutletContext();
-  const rememberStartedState = readPreference(PREFERENCE_KEYS.overlayOnLaunch, true);
-  const ambientMotion = readPreference(PREFERENCE_KEYS.ambientMotion, true);
-  const [started, setStarted] = useState(
-    rememberStartedState ? readPreference(PREFERENCE_KEYS.overlayStarted, false) : false
+function StatusRow({ captureState, overlayState, role }) {
+  return (
+    <div className="capture-status-grid">
+      <div className="capture-status-card">
+        <span>Status</span>
+        <strong>{captureState?.active ? "Capture active" : captureState?.status || "idle"}</strong>
+      </div>
+      <div className="capture-status-card">
+        <span>Source</span>
+        <strong>{captureState?.sourceLabel || "No source selected"}</strong>
+      </div>
+      <div className="capture-status-card">
+        <span>Overlay</span>
+        <strong>{overlayState?.visible ? overlayState.mode : "hidden"}</strong>
+      </div>
+      <div className="capture-status-card">
+        <span>Role</span>
+        <strong>{ROLE_LOOKUP[role]}</strong>
+      </div>
+    </div>
   );
+}
+
+export default function Home() {
+  const intel = useOutletContext();
+  const ambientMotion = readPreference(PREFERENCE_KEYS.ambientMotion, true);
   const [role, setRole] = useState(readPreference(PREFERENCE_KEYS.defaultRole, "carry"));
+  const captureActive = Boolean(intel?.captureState?.active);
 
-  async function handlePrimaryAction() {
-    const nextStarted = true;
-    setStarted(nextStarted);
+  async function handleStartCapture() {
+    const result = await intel?.startCapture?.();
 
-    if (rememberStartedState) {
-      writePreference(PREFERENCE_KEYS.overlayStarted, nextStarted);
+    if (result?.ok && !intel?.overlayState?.visible) {
+      const bootMode = readPreference(PREFERENCE_KEYS.overlayBootMode, "launcher");
+      await intel?.showOverlay?.(bootMode);
     }
-
-    if (gsi?.overlayState?.visible) {
-      await gsi.hideOverlay();
-      return;
-    }
-
-    const bootMode = readPreference(PREFERENCE_KEYS.overlayBootMode, "launcher");
-    await gsi.showOverlay(bootMode);
   }
 
   function handleRoleChange(nextRole) {
@@ -37,21 +49,23 @@ export default function Home() {
 
   return (
     <section
-      className={`surface-page ${ambientMotion ? "surface-page--ambient" : ""}`}
+      className={`surface-page surface-page--clean ${
+        ambientMotion ? "surface-page--ambient" : ""
+      }`}
     >
-      <header className="surface-nav">
+      <header className="surface-nav surface-nav--clean">
         <div className="surface-nav__brand">
-          <span className="surface-nav__eyebrow">DOTA HELPER</span>
-          <strong>Aether Draft Engine</strong>
+          <span className="surface-nav__eyebrow">Dota Helper</span>
+          <strong>Screen Overlay</strong>
         </div>
 
         <div className="surface-nav__actions">
           <span
             className={`status-pill ${
-              gsi?.serverStatus?.running ? "status-pill--online" : "status-pill--offline"
+              captureActive ? "status-pill--online" : "status-pill--offline"
             }`}
           >
-            {gsi?.serverStatus?.running ? "GSI Online" : "GSI Offline"}
+            {captureActive ? "Live Capture" : "Not Capturing"}
           </span>
           <Link to="/settings" className="surface-icon-button">
             Settings
@@ -59,81 +73,80 @@ export default function Home() {
         </div>
       </header>
 
-      <section className="landing-hero">
-        <div className="landing-hero__overlay" />
-        <div className="landing-hero__content">
-          <span className="landing-badge">Dota 2 Overlay Assistant</span>
-          <h1>Dota Helper Overlay</h1>
+      <section className="landing-hero landing-hero--clean">
+        <div className="landing-hero__content landing-hero__content--clean">
+          <span className="landing-badge">No GSI setup required</span>
+          <h1>Dota capture overlay</h1>
           <p>
-            Start with a single Dota-style button. The first toggle spawns a movable
-            launcher on the right edge of the screen. Clicking that launcher opens the
-            compact live panel for picks, enemy HP, and item suggestions.
+            Pick the Dota 2 window or the monitor where Dota is visible. The app reads
+            the screen to infer draft heroes, live enemy health, and item responses for
+            bots, real matches, and spectating.
           </p>
 
           <div className="landing-hero__actions">
-            <button type="button" className="dota-cta" onClick={handlePrimaryAction}>
-              <span className="dota-cta__icon">▶</span>
-              <span>{started ? "CHANGE VIEW" : "START OVERLAY"}</span>
-            </button>
+            {captureActive ? (
+              <button
+                type="button"
+                className="dota-cta dota-cta--quiet"
+                onClick={() => intel?.stopCapture?.()}
+              >
+                <span>Stop Capture</span>
+              </button>
+            ) : (
+              <button type="button" className="dota-cta" onClick={handleStartCapture}>
+                <span className="dota-cta__icon">▶</span>
+                <span>Choose Dota Window</span>
+              </button>
+            )}
 
-            <Link to="/settings" className="surface-secondary-link">
-              Settings
-            </Link>
-          </div>
-
-          <div className="landing-hero__hint">
-            <strong>Saved role:</strong> {ROLE_LOOKUP[role]}
-          </div>
-        </div>
-
-        <div className="landing-status-pill">
-          OVERLAY: {gsi?.overlayState?.visible ? gsi.overlayState.mode.toUpperCase() : "OFF"}
-        </div>
-      </section>
-
-      {!started ? (
-        <section className="landing-feature-grid">
-          <article className="landing-feature">
-            <span>01</span>
-            <h3>Draft Read</h3>
-            <p>During hero selection the dashboard flips to enemy picks and counter heroes.</p>
-          </article>
-          <article className="landing-feature">
-            <span>02</span>
-            <h3>Live Match</h3>
-            <p>After the horn, the same space shifts into enemy HP and item response signals.</p>
-          </article>
-          <article className="landing-feature">
-            <span>03</span>
-            <h3>Overlay Launcher</h3>
-            <p>A movable side widget keeps the compact view one click away while you play.</p>
-          </article>
-        </section>
-      ) : (
-        <section className="dashboard-surface">
-          <div className="dashboard-surface__header">
-            <div>
-              <p className="intel-kicker">Full Screen View</p>
-              <h2>Match intelligence board</h2>
-            </div>
             <button
               type="button"
               className="surface-tertiary-button"
-              onClick={() => gsi.showOverlay("launcher")}
+              onClick={() =>
+                intel?.overlayState?.visible
+                  ? intel?.hideOverlay?.()
+                  : intel?.showOverlay?.(readPreference(PREFERENCE_KEYS.overlayBootMode, "launcher"))
+              }
             >
-              Show Side Overlay
+              {intel?.overlayState?.visible ? "Hide Overlay" : "Show Overlay"}
             </button>
           </div>
 
-          <IntelBoard
-            matchState={gsi?.matchState}
-            serverStatus={gsi?.serverStatus}
-            role={role}
-            onRoleChange={handleRoleChange}
-            variant="full"
-          />
-        </section>
-      )}
+          {intel?.captureState?.error ? (
+            <p className="capture-inline-error">{intel.captureState.error}</p>
+          ) : null}
+        </div>
+      </section>
+
+      <StatusRow
+        captureState={intel?.captureState}
+        overlayState={intel?.overlayState}
+        role={role}
+      />
+
+      <section className="dashboard-surface dashboard-surface--clean">
+        <div className="dashboard-surface__header">
+          <div>
+            <p className="intel-kicker">Main View</p>
+            <h2>Match board</h2>
+          </div>
+          <button
+            type="button"
+            className="surface-tertiary-button"
+            onClick={() => intel?.focusMainWindow?.()}
+          >
+            Focus Window
+          </button>
+        </div>
+
+        <IntelBoard
+          captureState={intel?.captureState}
+          matchState={intel?.matchState}
+          role={role}
+          onRoleChange={handleRoleChange}
+          variant="full"
+        />
+      </section>
     </section>
   );
 }

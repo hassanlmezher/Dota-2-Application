@@ -18,6 +18,7 @@ export default function ItemAssistant({
   enemyItemNames = [],
   limit = 8,
   active = true,
+  feedScope = "unknown",
 }) {
   const { results, loading, error, runItemSearch } = useItemSuggestions();
   const [resolvedMyHero, setResolvedMyHero] = useState(null);
@@ -83,7 +84,7 @@ export default function ItemAssistant({
           );
         } else if (!nextEnemyHeroes.length && normalizedEnemyNames.length) {
           setResolutionError(
-            "Enemy heroes were detected from GSI, but none matched the Supabase hero catalog."
+            "Enemy heroes were detected from screen capture, but none matched the Supabase hero catalog."
           );
         }
       } catch (requestError) {
@@ -134,7 +135,7 @@ export default function ItemAssistant({
     return (
       <EmptyCard
         title="Waiting for your hero"
-        description="The item assistant starts once the GSI feed knows which hero you are playing."
+        description="The item assistant starts once the capture pipeline can identify the current focus hero."
       />
     );
   }
@@ -143,7 +144,11 @@ export default function ItemAssistant({
     return (
       <EmptyCard
         title="No enemy heroes detected yet"
-        description="Item recommendations require at least one enemy hero from the live feed."
+        description={
+          feedScope === "player"
+            ? "The current screen view has not exposed the enemy lineup clearly enough yet."
+            : "Item recommendations require at least one enemy hero from the live screen feed."
+        }
       />
     );
   }
@@ -152,7 +157,7 @@ export default function ItemAssistant({
     return (
       <EmptyCard
         title="Resolving live match context"
-        description="Matching your hero, enemy heroes, and enemy items against Supabase tables."
+        description="Matching the detected hero lineup against Supabase tables."
       />
     );
   }

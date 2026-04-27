@@ -4,7 +4,7 @@ import IntelBoard from "../components/IntelBoard";
 import { PREFERENCE_KEYS, readPreference, writePreference } from "../utils/preferences";
 
 export default function MatchOverlay() {
-  const gsi = useOutletContext();
+  const intel = useOutletContext();
   const [role, setRole] = useState(readPreference(PREFERENCE_KEYS.defaultRole, "carry"));
   const dragStateRef = useRef({
     active: false,
@@ -13,13 +13,13 @@ export default function MatchOverlay() {
     offsetX: 0,
     offsetY: 0,
   });
-  const overlayMode = gsi?.overlayState?.mode || "launcher";
-  const phaseLabel =
-    gsi?.matchState?.phase === "draft"
-      ? "Draft"
-      : gsi?.matchState?.phase === "match"
-        ? "Live Match"
-        : "Awaiting GSI";
+  const overlayMode = intel?.overlayState?.mode || "launcher";
+  const captureLabel =
+    intel?.captureState?.status === "active"
+      ? "Live Capture"
+      : intel?.captureState?.status === "requesting"
+        ? "Choosing Source"
+        : "Capture Idle";
 
   function handleRoleChange(nextRole) {
     setRole(nextRole);
@@ -71,7 +71,7 @@ export default function MatchOverlay() {
       }
     }
 
-    gsi?.moveOverlay?.(nextX, nextY);
+    intel?.moveOverlay?.(nextX, nextY);
   }
 
   function handleLauncherPointerUp(event) {
@@ -86,7 +86,7 @@ export default function MatchOverlay() {
     resetLauncherDragState();
 
     if (shouldOpenPanel) {
-      gsi.setOverlayMode("panel");
+      intel?.setOverlayMode?.("panel");
     }
   }
 
@@ -131,33 +131,42 @@ export default function MatchOverlay() {
 
   return (
     <section className="overlay-page overlay-page--panel">
-      <div className="overlay-panel-shell">
+      <div className="overlay-panel-shell overlay-panel-shell--clean">
         <header className="overlay-panel-header drag-region">
           <div>
-            <span className="surface-nav__eyebrow">DOTA HELPER</span>
+            <span className="surface-nav__eyebrow">Dota Helper</span>
             <strong>Compact Overlay</strong>
-            <small>{phaseLabel}</small>
+            <small>{captureLabel}</small>
           </div>
 
           <div className="overlay-panel-header__actions no-drag">
+            {!intel?.captureState?.active ? (
+              <button
+                type="button"
+                className="overlay-header-button"
+                onClick={() => intel?.startCapture?.()}
+              >
+                Start
+              </button>
+            ) : null}
             <button
               type="button"
               className="overlay-header-button"
-              onClick={() => gsi.focusMainWindow()}
+              onClick={() => intel?.focusMainWindow?.()}
             >
               Full View
             </button>
             <button
               type="button"
               className="overlay-header-button"
-              onClick={() => gsi.setOverlayMode("launcher")}
+              onClick={() => intel?.setOverlayMode?.("launcher")}
             >
               Collapse
             </button>
             <button
               type="button"
               className="overlay-header-button overlay-header-button--danger"
-              onClick={() => gsi.hideOverlay()}
+              onClick={() => intel?.hideOverlay?.()}
             >
               ×
             </button>
@@ -165,8 +174,8 @@ export default function MatchOverlay() {
         </header>
 
         <IntelBoard
-          matchState={gsi?.matchState}
-          serverStatus={gsi?.serverStatus}
+          captureState={intel?.captureState}
+          matchState={intel?.matchState}
           role={role}
           onRoleChange={handleRoleChange}
           variant="compact"

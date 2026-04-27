@@ -1,15 +1,15 @@
 import { Outlet, useLocation } from "react-router-dom";
-import { useGSIListener } from "./hooks/useGSIListener";
+import { useScreenIntel } from "./hooks/useScreenIntel";
 
 export default function App() {
   const location = useLocation();
   const isOverlayRoute = location.pathname === "/overlay";
-  const gsi = useGSIListener({ autoStart: true });
+  const intel = useScreenIntel();
 
   return (
     <div className={`app-shell ${isOverlayRoute ? "app-shell--overlay" : ""}`}>
       <main className={isOverlayRoute ? "overlay-shell" : "page-shell"}>
-        <Outlet context={gsi} />
+        <Outlet context={intel} />
       </main>
     </div>
   );
