@@ -93,7 +93,10 @@ function sanitizeMatchState(matchState) {
 
 function getTemplateRuntime() {
   if (!templateRuntimePromise) {
-    templateRuntimePromise = loadHeroTemplates();
+    templateRuntimePromise = loadHeroTemplates().catch((error) => {
+      templateRuntimePromise = null;
+      throw error;
+    });
   }
 
   return templateRuntimePromise;
@@ -117,6 +120,11 @@ export function useScreenIntel() {
   );
   const [overlayState, setOverlayState] = useState(fallbackOverlayState);
   const [isCaptureOwner, setIsCaptureOwner] = useState(false);
+  const [appInfo, setAppInfo] = useState({
+    isPackaged: false,
+    appName: "Dota Helper App",
+    capturePermissionTarget: "Electron",
+  });
   const channelRef = useRef(null);
   const captureRef = useRef({
     disposed: false,
@@ -265,17 +273,11 @@ export function useScreenIntel() {
     const electronApi = getElectronApi();
     const screenAccessStatus = await electronApi?.capture?.getScreenAccessStatus?.();
 
-    if (screenAccessStatus === "denied" || screenAccessStatus === "restricted") {
-      const message =
-        "macOS is blocking screen capture. Enable Screen Recording for this app in System Settings > Privacy & Security > Screen Recording, then restart the app.";
-      updateStatus({
-        status: "error",
-        active: false,
-        error: message,
-        ownerId: null,
-      });
-      return { ok: false, message };
-    }
+    const permissionTarget =
+      appInfo?.capturePermissionTarget ||
+      (appInfo?.isPackaged ? appInfo.appName : "Electron");
+    const permissionLooksBlocked =
+      screenAccessStatus === "denied" || screenAccessStatus === "restricted";
 
     channelRef.current?.postMessage({
       type: "screen:takeover",
@@ -400,7 +402,9 @@ export function useScreenIntel() {
         error?.name === "NotAllowedError" ||
         /permission|notallowed|denied/i.test(error?.message || "");
       const message = isPermissionError
-        ? "Screen capture was blocked. On macOS, allow Screen Recording for this app and then restart it."
+        ? `Screen capture was blocked. On macOS, allow Screen Recording for ${permissionTarget} and then relaunch the app.`
+        : permissionLooksBlocked
+          ? `macOS still reports Screen Recording as blocked for ${permissionTarget}. Try relaunching the app after enabling the permission.`
         : error?.message || "Failed to start screen capture.";
 
       stopCaptureInternal({
@@ -489,6 +493,15 @@ export function useScreenIntel() {
         }) || (() => {});
     }
 
+    electronApi?.app?.getInfo?.().then((nextAppInfo) => {
+      if (nextAppInfo) {
+        setAppInfo((currentValue) => ({
+          ...currentValue,
+          ...nextAppInfo,
+        }));
+      }
+    });
+
     return () => {
       const wasOwner = ownerRef.current;
       captureRef.current.disposed = true;
@@ -551,6 +564,7 @@ export function useScreenIntel() {
     captureState,
     focusMainWindow,
     hideOverlay,
+    appInfo,
     isCaptureOwner,
     isElectronRuntime: Boolean(window.electronAPI?.isElectron),
     matchState,
@@ -560,6 +574,9 @@ export function useScreenIntel() {
     showOverlay,
     startCapture,
     stopCapture,
+    relaunchApp: () => getElectronApi()?.app?.relaunch?.(),
+    openScreenRecordingSettings: () =>
+      getElectronApi()?.capture?.openScreenRecordingSettings?.(),
     toggleOverlay,
   };
 }

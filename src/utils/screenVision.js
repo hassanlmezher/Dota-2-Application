@@ -10,6 +10,14 @@ const BOTTOM_MATCH_THRESHOLD = 0.52;
 const HEALTH_ICON_THRESHOLD = 0.58;
 const MAX_FRAME_WIDTH = 1280;
 
+function getElectronApi() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  return window.electronAPI || null;
+}
+
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
@@ -93,14 +101,36 @@ function scoreVectors(left, right) {
   return 1 - difference / left.length;
 }
 
-async function loadBitmap(url) {
+async function fetchBitmapBlob(url) {
+  const electronApi = getElectronApi();
+
+  if (electronApi?.assets?.fetchRemoteImageDataUrl) {
+    const result = await electronApi.assets.fetchRemoteImageDataUrl(url);
+
+    if (!result?.ok || !result?.dataUrl) {
+      throw new Error(result?.message || `Failed to fetch hero image: ${url}`);
+    }
+
+    const dataResponse = await fetch(result.dataUrl);
+
+    if (!dataResponse.ok) {
+      throw new Error(`Failed to decode hero image: ${url}`);
+    }
+
+    return dataResponse.blob();
+  }
+
   const response = await fetch(url);
 
   if (!response.ok) {
     throw new Error(`Failed to fetch hero image: ${url}`);
   }
 
-  const blob = await response.blob();
+  return response.blob();
+}
+
+async function loadBitmap(url) {
+  const blob = await fetchBitmapBlob(url);
   return createImageBitmap(blob);
 }
 
@@ -175,6 +205,12 @@ async function loadHeroTemplates() {
   ).filter(Boolean);
 
   const templateMap = new Map(templates.map((template) => [template.key, template]));
+
+  if (!templates.length) {
+    throw new Error(
+      "Hero templates could not be loaded. Remote hero images were unavailable to the scanner."
+    );
+  }
 
   return {
     templates,

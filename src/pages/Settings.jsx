@@ -139,8 +139,9 @@ export default function Settings() {
               <strong>How capture works</strong>
               <p>
                 The desktop app now tries to auto-select Dota 2 first. On macOS, if
-                Screen Recording permission is blocked, enable it for this app and then
-                restart the app.
+                Screen Recording permission is blocked, enable it for{" "}
+                <strong>{intel?.appInfo?.capturePermissionTarget || "Electron"}</strong> and
+                then restart the app.
               </p>
             </div>
 

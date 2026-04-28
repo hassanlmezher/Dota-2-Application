@@ -5,6 +5,7 @@ const {
   ipcMain,
   screen,
   session,
+  shell,
   systemPreferences,
 } = require("electron");
 const fs = require("node:fs");
@@ -49,6 +50,7 @@ const GSI_CONFIG_CONTENT = `"DotaHelper"
 let latestMatchState = null;
 let gsiServer = null;
 let preferredCaptureSourceId = null;
+const remoteImageDataUrlCache = new Map();
 
 app.commandLine.appendSwitch("disable-renderer-backgrounding");
 
@@ -332,9 +334,16 @@ async function setupDotaGsiConfig() {
 function registerIpcHandlers() {
   ipcMain.handle("app:get-info", () => ({
     isPackaged: app.isPackaged,
+    appName: app.getName(),
+    capturePermissionTarget: app.isPackaged ? app.getName() : "Electron",
     versions: process.versions,
     gsiPort: GSI_PORT,
   }));
+  ipcMain.handle("app:relaunch", () => {
+    app.relaunch();
+    app.exit(0);
+    return true;
+  });
 
   ipcMain.handle("capture:get-screen-access-status", () => getScreenAccessStatus());
   ipcMain.handle("capture:list-sources", async () => {
@@ -349,6 +358,64 @@ function registerIpcHandlers() {
     };
   });
   ipcMain.handle("capture:get-preferred-source", () => preferredCaptureSourceId);
+  ipcMain.handle("capture:open-screen-recording-settings", async () => {
+    if (process.platform !== "darwin") {
+      return { ok: false, message: "This shortcut is only used on macOS." };
+    }
+
+    try {
+      await shell.openExternal(
+        "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
+      );
+
+      return { ok: true };
+    } catch (error) {
+      return {
+        ok: false,
+        message: error?.message || "Failed to open macOS Screen Recording settings.",
+      };
+    }
+  });
+
+  ipcMain.handle("assets:fetch-remote-image-data-url", async (_event, url) => {
+    if (!url || typeof url !== "string") {
+      return {
+        ok: false,
+        message: "A remote image URL is required.",
+      };
+    }
+
+    if (remoteImageDataUrlCache.has(url)) {
+      return {
+        ok: true,
+        dataUrl: remoteImageDataUrlCache.get(url),
+      };
+    }
+
+    try {
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch remote image (${response.status}).`);
+      }
+
+      const contentType = response.headers.get("content-type") || "application/octet-stream";
+      const arrayBuffer = await response.arrayBuffer();
+      const dataUrl = `data:${contentType};base64,${Buffer.from(arrayBuffer).toString("base64")}`;
+
+      remoteImageDataUrlCache.set(url, dataUrl);
+
+      return {
+        ok: true,
+        dataUrl,
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        message: error?.message || "Failed to fetch remote image.",
+      };
+    }
+  });
 
   ipcMain.handle("gsi:start", async () => {
     if (!gsiServer) {

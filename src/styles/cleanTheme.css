@@ -145,8 +145,26 @@ body {
 }
 
 .capture-inline-error {
-  margin-top: 16px;
+  margin: 0;
   color: var(--danger);
+}
+
+.capture-inline-error-card {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.capture-inline-error-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.capture-inline-hint {
+  color: var(--text-muted);
+  line-height: 1.5;
 }
 
 .dashboard-surface--clean,
@@ -536,6 +554,7 @@ body {
   }
 
   .landing-hero__actions,
+  .capture-inline-error-actions,
   .surface-nav__actions,
   .settings-footer,
   .settings-toggle-row,

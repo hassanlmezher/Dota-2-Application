@@ -42,6 +42,12 @@ export default function Home() {
     }
   }
 
+  const permissionTarget =
+    intel?.appInfo?.capturePermissionTarget ||
+    (intel?.appInfo?.isPackaged ? intel?.appInfo?.appName : "Electron");
+  const showScreenRecordingHelp =
+    /screen capture|screen recording/i.test(intel?.captureState?.error || "");
+
   function handleRoleChange(nextRole) {
     setRole(nextRole);
     writePreference(PREFERENCE_KEYS.defaultRole, nextRole);
@@ -113,7 +119,31 @@ export default function Home() {
           </div>
 
           {intel?.captureState?.error ? (
-            <p className="capture-inline-error">{intel.captureState.error}</p>
+            <div className="capture-inline-error-card">
+              <p className="capture-inline-error">{intel.captureState.error}</p>
+              {showScreenRecordingHelp ? (
+                <div className="capture-inline-error-actions">
+                  <button
+                    type="button"
+                    className="surface-tertiary-button"
+                    onClick={() => intel?.openScreenRecordingSettings?.()}
+                  >
+                    Open Screen Recording Settings
+                  </button>
+                  <button
+                    type="button"
+                    className="surface-tertiary-button"
+                    onClick={() => intel?.relaunchApp?.()}
+                  >
+                    Relaunch App
+                  </button>
+                  <span className="capture-inline-hint">
+                    Enable access for <strong>{permissionTarget}</strong>, then relaunch
+                    the app from here and press <strong>Start Scan</strong> again.
+                  </span>
+                </div>
+              ) : null}
+            </div>
           ) : null}
         </div>
       </section>

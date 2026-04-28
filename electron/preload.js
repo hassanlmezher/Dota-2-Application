@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   toggleOverlay: () => ipcRenderer.invoke("window:toggle-overlay"),
   app: {
     getInfo: () => ipcRenderer.invoke("app:get-info"),
+    relaunch: () => ipcRenderer.invoke("app:relaunch"),
   },
   capture: {
     getScreenAccessStatus: () => ipcRenderer.invoke("capture:get-screen-access-status"),
@@ -23,6 +24,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
     setPreferredSource: (sourceId) =>
       ipcRenderer.invoke("capture:set-preferred-source", sourceId),
     getPreferredSource: () => ipcRenderer.invoke("capture:get-preferred-source"),
+    openScreenRecordingSettings: () =>
+      ipcRenderer.invoke("capture:open-screen-recording-settings"),
+  },
+  assets: {
+    fetchRemoteImageDataUrl: (url) =>
+      ipcRenderer.invoke("assets:fetch-remote-image-data-url", url),
   },
   gsi: {
     start: () => ipcRenderer.invoke("gsi:start"),
